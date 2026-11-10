@@ -593,8 +593,8 @@ private:
         return std::make_pair(line.substr(a, b - a), py_strip(line.substr(c)));
     }
 
-    // protocol.ProtocolFormatter.format_message: a control char or non-ASCII
-    // byte makes the reference raise ValueError, which kills the connection.
+    // protocol.ProtocolFormatter.format_message: a newline, a carriage return
+    // or a non-ASCII byte in a param or value is refused, as the reference does.
     bool value_line(const std::string& param, const Value& v, std::string& out) const {
         if (v.is_list) {                       // header line, then one line per item
             std::string text = param;
@@ -884,9 +884,11 @@ int main(int argc, char** argv) {
     const int listener = listen_on(opt.host, opt.port, port);
     if (listener < 0) return 1;
 
-    Sim sim(opt);
-    std::mutex conn_mu;
-    std::set<int> live;
+    // Deliberately never freed: the detached control thread below and the
+    // connection threads may still use them after main returns.
+    Sim& sim = *new Sim(opt);
+    std::mutex& conn_mu = *new std::mutex;
+    std::set<int>& live = *new std::set<int>;
     struct Worker {
         std::thread thread;
         std::atomic<bool> done{false};

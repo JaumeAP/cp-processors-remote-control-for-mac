@@ -72,10 +72,10 @@ public actor TCPTransport: LineTransport {
                     }
                 }
                 conn.start(queue: networkQueue)
-                Task {
+                once.attach(timeout: Task {
                     try? await Task.sleep(for: .seconds(timeout))
                     once.resume(false)
-                }
+                })
                 pendingConnect = (conn, once)
             }
         } onCancel: {
@@ -112,10 +112,10 @@ public actor TCPTransport: LineTransport {
             conn.send(content: data, completion: .contentProcessed { error in
                 once.resume(error.map { .failure(.sendFailed("\($0)")) } ?? .success(()))
             })
-            Task {
+            once.attach(timeout: Task {
                 try? await Task.sleep(for: .seconds(timeout))
                 once.resume(.failure(.writeTimedOut))
-            }
+            })
         }
         if case .failure(let failure) = result {
             if case .sendFailed = failure, connection === conn { failed = true }
@@ -162,10 +162,10 @@ public actor TCPTransport: LineTransport {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 let once = ResumeOnce(continuation)
                 dataWaiter = once
-                Task {
+                once.attach(timeout: Task {
                     try? await Task.sleep(for: remaining)
                     once.resume(false)
-                }
+                })
             }
         } onCancel: {
             Task { await self.wakeReader() }
@@ -219,17 +219,31 @@ public actor TCPTransport: LineTransport {
 final class ResumeOnce<T: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var continuation: CheckedContinuation<T, Never>?
+    private var timeout: Task<Void, Never>?
 
     init(_ continuation: CheckedContinuation<T, Never>) {
         self.continuation = continuation
+    }
+
+    /// Ties a timeout to this waiter. The timeout is cancelled as soon as the
+    /// waiter is resumed by anything else, so it does not outlive the wait.
+    func attach(timeout task: Task<Void, Never>) {
+        lock.lock()
+        let alreadyResumed = continuation == nil
+        if !alreadyResumed { timeout = task }
+        lock.unlock()
+        if alreadyResumed { task.cancel() }
     }
 
     @discardableResult
     func resume(_ value: T) -> Bool {
         lock.lock()
         let pending = continuation
+        let timer = timeout
         continuation = nil
+        timeout = nil
         lock.unlock()
+        timer?.cancel()
         pending?.resume(returning: value)
         return pending != nil
     }

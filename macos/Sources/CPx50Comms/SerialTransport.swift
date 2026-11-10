@@ -124,10 +124,10 @@ public actor SerialTransport: LineTransport {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 let once = ResumeOnce(continuation)
                 dataWaiter = once
-                Task {
+                once.attach(timeout: Task {
                     try? await Task.sleep(for: remaining)
                     once.resume(false)
-                }
+                })
             }
         } onCancel: {
             Task { await self.wakeReader() }

@@ -138,7 +138,7 @@ public actor DolbyCP {
         await enterLifecycle()
         defer { leaveLifecycle() }
         await stopBackground()
-        await transport.close()
+        await closeLocked()
         return await connectUnlocked()
     }
 
@@ -147,13 +147,13 @@ public actor DolbyCP {
         await enterLifecycle()
         defer { leaveLifecycle() }
         await stopBackground()
-        await transport.close()
+        await closeLocked()
         mark(.missing)
     }
 
     private func connectUnlocked() async -> Bool {
         await stopBackground()
-        let ok = await transport.connect()
+        let ok = await connectLocked()
         mark(ok ? .ok : .missing)
         if ok {
             lastActivity = .now
@@ -432,6 +432,21 @@ public actor DolbyCP {
     }
 
     // MARK: - One command in flight (FIFO)
+
+    /// Close the transport while holding the command lock, so no command is
+    /// mid-exchange on it (the transport allows one reader and one writer).
+    private func closeLocked() async {
+        await acquire()
+        await transport.close()
+        release()
+    }
+
+    /// Open the transport while holding the command lock.
+    private func connectLocked() async -> Bool {
+        await acquire()
+        defer { release() }
+        return await transport.connect()
+    }
 
     private func acquire() async {
         if !busy {

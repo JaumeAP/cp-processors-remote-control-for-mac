@@ -61,8 +61,9 @@ final class RemoteModel: ObservableObject {
         didSet { defaults.set(host, forKey: Self.hostKey) }
     }
     @Published var showSetup = false
-    /// The processor model: its front panel and its wire names. Only the CP650
-    /// has live panel controls (the app sends CP650 parameter names only).
+    /// The processor model: its front panel, its wire names and its controls.
+    /// The fader and mute are live on every model; the front-panel buttons
+    /// follow the model's profile (the CP750's inputs, the CP650's formats).
     @Published private(set) var processorModel: ProcessorModel
     @Published private(set) var fader: Double = 7.0
     @Published private(set) var formatButton: Int?
