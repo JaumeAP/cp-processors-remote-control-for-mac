@@ -24,8 +24,8 @@ struct EventLogTests {
         await cp.disconnect()
 
         let text = events.lines.joined(separator: "\n")
-        for expected in ["connect succeeded", "status initializing -> ok (connect)", "send fader_level?",
-                         "recv fader_level=70", "send no_such_param?", "recv <nothing within 0.3 s>",
+        for expected in ["connect succeeded", "status initializing -> ok (connect)", "send fader_level=?",
+                         "recv fader_level=70", "send no_such_param=?", "recv <nothing within 0.3 s>",
                          "disconnect"] {
             #expect(text.contains(expected), "missing: \(expected)\n\(text)")
         }

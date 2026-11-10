@@ -11,7 +11,7 @@ public enum ProcessorModel: String, CaseIterable, Sendable {
 
     /// How commands and replies are framed on the wire.
     public enum Dialect: Sendable {
-        /// `KEY=VALUE`, query `KEY?` (CP650).
+        /// `KEY=VALUE`, query `KEY=?` (CP650).
         case keyValue
         /// `param value`, query `param ?` (CP750, CP850, CP950, CP950A).
         case paramValue

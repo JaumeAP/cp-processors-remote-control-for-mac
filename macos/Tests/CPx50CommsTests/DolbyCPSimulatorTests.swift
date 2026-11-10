@@ -167,7 +167,7 @@ struct DolbyCPLinkTests {
         async let mute = cp.get("mute", timeout: 0.5)
         async let format = cp.get("format_button", timeout: 0.5)
         let values = try await [fader, mute, format]
-        #expect(values == ["70", "0", "1"])
+        #expect(values == ["70", "0", "0"])
         await cp.disconnect()
     }
 

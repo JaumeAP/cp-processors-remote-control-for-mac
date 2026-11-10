@@ -19,7 +19,7 @@
    2. `SerialTransport`: a POSIX terminal, for models with a serial port.
 3. `LineBuffer`: splits incoming bytes into lines.
 4. `WireProtocol`: the command framing. The CP650 uses `KEY=VALUE` and
-   `KEY?`; the other models use `param value` and `param ?`.
+   `KEY=?`; the other models use `param value` and `param ?`.
 5. `ProcessorModel`: each model's port and framing, and (with `ProtocolTiming`)
    the gap between commands.
 6. `CommandQueue`: the SETs waiting to be sent. A SET to a parameter already

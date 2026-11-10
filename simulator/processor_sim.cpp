@@ -264,7 +264,7 @@ struct Profile {
 
 Profile plugin_profile(const std::string& model) {
     if (model == "CP650")
-        return {{{"fader_level", "70"}, {"mute", "0"}, {"format_button", "1"},
+        return {{{"fader_level", "70"}, {"mute", "0"}, {"format_button", "0"},
                  {"format_list", "01, 04, 05, 10, 93, 94, 95, 99"}}, {}};
     if (model == "CP750")
         return {{{"cp750.sysinfo.version", "1.4.2"}, {"cp750.sys.fader", "70"}, {"cp750.sys.mute", "0"},

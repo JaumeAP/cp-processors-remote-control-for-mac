@@ -70,7 +70,7 @@ public enum WireProtocol {
     public static func formatQuery(model: ProcessorModel, param: String) throws(ProtocolError) -> String {
         try requireFramable(param, .param)
         switch model.dialect {
-        case .keyValue: return "\(param)?"
+        case .keyValue: return "\(param)=?"
         case .paramValue: return "\(param) ?"
         }
     }

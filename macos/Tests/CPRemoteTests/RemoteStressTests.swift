@@ -217,10 +217,10 @@ struct RemoteStressTests {
         defer { sim.stop() }
         let model = try await connected(sim)
         #expect(model.fader == 4.5)
-        #expect(model.formatButton == 3)
+        #expect(model.formatButton == 4)   // the CP650 counts its buttons from 0
         #expect(model.muted == true)
         #expect(model.programmedFormats == ["01", "04", "05", "10", "93", "94", "95", "99"])
-        #expect(model.currentFormat == "05")
+        #expect(model.currentFormat == "10")
         await model.disconnect()
     }
 
@@ -322,7 +322,7 @@ struct RemoteStressTests {
             if step % 50 == 0 { await Task.yield() }
         }
         #expect(model.formatButton == last)
-        let expected = String(last)
+        let expected = String(last - 1)
         #expect(await eventually(30) { await probe(sim, "format_button") == expected },
                 "processor should end on button \(last)")
         try await Task.sleep(for: .seconds(2.5))
@@ -503,7 +503,7 @@ struct RemoteStressTests {
         model.stepKnob(up: false)
         #expect(await settles(model, sim, on: wire(model.fader)))
         let mute = model.muted ? "1" : "0"
-        #expect(await eventually(10) { await probe(sim, "format_button") == String(format) })
+        #expect(await eventually(10) { await probe(sim, "format_button") == String(format - 1) })
         #expect(await eventually(10) { await probe(sim, "mute") == mute })
         try await Task.sleep(for: .seconds(2.5))
         #expect(model.formatButton == format)
@@ -699,7 +699,7 @@ struct EveryControlTests {
         #expect(model.programmedFormats == ["01", "04", "05", "10", "93", "94", "95", "99"])
         for button in 1...8 {
             model.pressButton(button)
-            #expect(await eventually { await probe(sim, "format_button") == String(button) },
+            #expect(await eventually { await probe(sim, "format_button") == String(button - 1) },
                     "format button \(button)")
             #expect(model.currentFormat == model.programmedFormats?[button - 1])
         }
@@ -909,7 +909,7 @@ struct ReconnectAfterCutTests {
         log.flush()
         let text = try String(contentsOf: log.url, encoding: .utf8)
         for expected in ["app: connect to 127.0.0.1 as CP650", "link: connect succeeded",
-                         "link: status initializing -> ok (connect)", "link: send fader_level?",
+                         "link: status initializing -> ok (connect)", "link: send fader_level=?",
                          "link: recv fader_level=70", "app: panel read: controls enabled",
                          "app: disconnect requested"] {
             #expect(text.contains(expected), "missing: \(expected)")
