@@ -37,8 +37,9 @@ private extension View {
     }
 }
 
-private let faceColor = Color(white: 0.13)
-private let printColor = Color(white: 0.78)
+// The face is light grey and its lettering dark, as on the unit.
+private let faceColor = Color(white: 0.74)
+private let printColor = Color(white: 0.12)
 /// Controls that cannot act (no answering link) are drawn faded.
 private let disabledOpacity = 0.4
 
@@ -119,7 +120,7 @@ private struct PanelBody: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: f.length(6))
-                .fill(LinearGradient(colors: [Color(white: 0.24), Color(white: 0.15)],
+                .fill(LinearGradient(colors: [Color(white: 0.70), Color(white: 0.58)],
                                      startPoint: .top, endPoint: .bottom))
                 .placed(f, 112, 642, 1068, 922)
             // Ventilation louvres on both sides.
@@ -127,6 +128,14 @@ private struct PanelBody: View {
                 let y = 652 + CGFloat(slat) * 24.6
                 Louvre().placed(f, 114, y, 262, y + 13)
                 Louvre().placed(f, 1030, y, 1066, y + 13)
+            }
+            // The black rack ears at both ends, each with two white slots.
+            Rectangle().fill(Color.black).placed(f, 112, 642, 145, 922)
+            Rectangle().fill(Color.black).placed(f, 1035, 642, 1068, 922)
+            ForEach([120.0, 1043.0], id: \.self) { slotX in
+                ForEach([716.0, 846.0], id: \.self) { slotY in
+                    Capsule().fill(Color.white).placed(f, slotX, slotY, slotX + 17, slotY + 11)
+                }
             }
             // The face between the louvres.
             Rectangle().fill(faceColor).placed(f, 262, 645, 1030, 920)
@@ -163,7 +172,7 @@ private struct PanelBody: View {
 private struct Louvre: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
-            .fill(LinearGradient(colors: [Color(white: 0.05), Color(white: 0.2)],
+            .fill(LinearGradient(colors: [Color(white: 0.46), Color(white: 0.74)],
                                  startPoint: .top, endPoint: .bottom))
     }
 }
@@ -173,7 +182,7 @@ private struct SetupDoor: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: f.length(4))
-            .fill(Color(white: 0.16))
+            .fill(Color(white: 0.66))
             .overlay(RoundedRectangle(cornerRadius: f.length(4))
                 .stroke(Color(white: 0.35), lineWidth: f.length(1)))
             .accessibilityHidden(true)
@@ -214,7 +223,7 @@ private struct LCDView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: f.length(5)).fill(Color(white: 0.04))
+            RoundedRectangle(cornerRadius: f.length(5)).fill(Color(white: 0.42))
             RoundedRectangle(cornerRadius: f.length(2))
                 .fill(LinearGradient(colors: [Color(red: 0.56, green: 0.76, blue: 0.27),
                                               Color(red: 0.44, green: 0.64, blue: 0.2)],
@@ -286,7 +295,7 @@ private struct PanelButtonFace: View {
         ZStack {
             Circle()
                 .fill(glow.map { AnyShapeStyle($0) } ?? AnyShapeStyle(
-                    RadialGradient(colors: [Color(white: 0.42), Color(white: 0.2)],
+                    RadialGradient(colors: [Color(white: 0.92), Color(white: 0.66)],
                                    center: .init(x: 0.35, y: 0.3),
                                    startRadius: 0, endRadius: diameter * 0.6)))
                 .shadow(color: glow ?? .clear, radius: diameter * 0.3)
@@ -318,7 +327,7 @@ private struct FormatButton: View {
                 PanelButtonFace(diameter: f.length(34), glow: selected ? .white : nil)
                 Text(silkscreen)
                     .font(.system(size: f.length(10), weight: .heavy).italic())
-                    .foregroundStyle(selected ? Color.black : Color(white: 0.9))
+                    .foregroundStyle(Color(white: 0.1))
             }
             .contentShape(Circle())
         }
@@ -360,7 +369,7 @@ private struct MuteButton: View {
             PanelButtonFace(diameter: f.length(30), glow: lit ? .red : nil)
             Image(systemName: "speaker.slash")
                 .font(.system(size: f.length(11), weight: .bold))
-                .foregroundStyle(lit ? Color.white : Color(white: 0.9))
+                .foregroundStyle(lit ? Color.white : Color(white: 0.1))
         }
     }
 }
@@ -380,7 +389,7 @@ private struct DecorativeButton: View {
                 Text(text).font(.system(size: f.length(10), weight: .heavy).italic())
             }
         }
-        .foregroundStyle(Color(white: 0.9))
+        .foregroundStyle(Color(white: 0.1))
         .accessibilityHidden(true)
     }
 }
@@ -390,11 +399,11 @@ private struct PowerButton: View {
 
     var body: some View {
         Capsule()
-            .fill(Color(white: 0.2))
+            .fill(Color(white: 0.88))
             .overlay(Capsule().stroke(Color.black, lineWidth: f.length(2)))
             .overlay(Image(systemName: "power")
                 .font(.system(size: f.length(13), weight: .bold))
-                .foregroundStyle(Color(white: 0.9)))
+                .foregroundStyle(Color(white: 0.1)))
             .accessibilityHidden(true)
     }
 }
@@ -407,8 +416,8 @@ private struct KnobCradle: View {
 
     var body: some View {
         Circle()
-            .fill(Color(white: 0.09))
-            .overlay(Circle().stroke(Color(white: 0.35), lineWidth: f.length(1.5)))
+            .fill(Color(white: 0.62))
+            .overlay(Circle().stroke(Color(white: 0.3), lineWidth: f.length(1.5)))
             .frame(width: f.length(150), height: f.length(150))
             .accessibilityHidden(true)
     }
