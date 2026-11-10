@@ -130,13 +130,21 @@ private struct PanelBody: View {
             }
             // The face between the louvres.
             Rectangle().fill(faceColor).placed(f, 262, 645, 1030, 920)
-            // Header band in three parts, with the model name on the right.
+            // Header band in three parts, red as on the unit, with the Dolby
+            // mark on the left and the model name on the right.
             ForEach([(262.0, 638.0), (642.0, 800.0), (805.0, 1030.0)], id: \.0) { part in
                 Rectangle()
-                    .fill(LinearGradient(colors: [Color(white: 0.42), Color(white: 0.32)],
+                    .fill(LinearGradient(colors: [Color(red: 0.93, green: 0.13, blue: 0.17),
+                                                  Color(red: 0.80, green: 0.08, blue: 0.12)],
                                          startPoint: .top, endPoint: .bottom))
                     .placed(f, part.0, 655, part.1, 688)
             }
+            Text("DOLBY")
+                .font(.system(size: f.length(9), weight: .heavy))
+                .foregroundStyle(.white)
+                .padding(.horizontal, f.length(5))
+                .overlay(RoundedRectangle(cornerRadius: f.length(1.5)).stroke(Color.white, lineWidth: f.length(1)))
+                .centred(f, 300, 672)
             VStack(alignment: .trailing, spacing: 0) {
                 Text("CP650").font(.system(size: f.length(13), weight: .heavy).italic())
                 Text("Digital Cinema Processor").font(.system(size: f.length(10.5), weight: .semibold).italic())

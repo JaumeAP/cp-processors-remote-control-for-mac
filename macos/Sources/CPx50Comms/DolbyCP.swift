@@ -43,6 +43,8 @@ public actor DolbyCP {
     private var lastActivity = ContinuousClock.now
     private var backoff: Double
     private var busy = false
+    /// Receives one line per event of the link; nil by default.
+    private var eventLog: (@Sendable (String) -> Void)?
     private var turnQueue: [CheckedContinuation<Void, Never>] = []
 
     /// A client over TCP to `host`, on `port` or the model's default port.
@@ -146,15 +148,17 @@ public actor DolbyCP {
     public func disconnect() async {
         await enterLifecycle()
         defer { leaveLifecycle() }
+        record("disconnect")
         await stopBackground()
         await closeLocked()
-        mark(.missing)
+        mark(.missing, "disconnect")
     }
 
     private func connectUnlocked() async -> Bool {
         await stopBackground()
         let ok = await connectLocked()
-        mark(ok ? .ok : .missing)
+        record("connect \(ok ? "succeeded" : "failed")")
+        mark(ok ? .ok : .missing, "connect")
         if ok {
             lastActivity = .now
             startBackground()
@@ -204,7 +208,7 @@ public actor DolbyCP {
     public func get(_ param: String, timeout: Double = ProtocolTiming.queryTimeout) async throws(ProtocolError) -> String? {
         if !(await linkUp()), autoReconnect { _ = await reconnectTransport() }
         if !(await linkUp()) {
-            mark(.missing)
+            mark(.missing, "get: link is down")
             return nil
         }
         let line = try WireProtocol.formatQuery(model: model, param: param)
@@ -305,14 +309,14 @@ public actor DolbyCP {
     private func watchdogTick() async {
         guard !Task.isCancelled else { return }
         if !(await linkUp()) {
-            mark(.missing)
+            mark(.missing, "watchdog: link is down")
             if autoReconnect { await autoReconnectStep() }
             return
         }
         guard let pollParam, !pollParam.isEmpty else { return }
         if queue.isEmpty { await pollOnce(pollParam) }
         if ContinuousClock.now - lastActivity > .seconds(watchdog) {
-            mark(.missing)
+            mark(.missing, "watchdog: no reply for \(watchdog) s")
             if autoReconnect { await autoReconnectStep() }
         }
     }
@@ -343,7 +347,8 @@ public actor DolbyCP {
         guard !Task.isCancelled else { return false }
         await transport.close()
         let ok = await transport.connect()
-        mark(ok ? .ok : .missing)
+        record("reconnect \(ok ? "succeeded" : "failed")")
+        mark(ok ? .ok : .missing, "reconnect")
         if ok { lastActivity = .now }
         return ok
     }
@@ -370,7 +375,8 @@ public actor DolbyCP {
         -> (response: String?, reachedWire: Bool)
     {
         guard await transport.isConnected() else {
-            mark(.missing)
+            record("not sent, link is down: \(line)")
+            mark(.missing, "send: link is down")
             return (nil, false)
         }
         var response: String?
@@ -378,14 +384,16 @@ public actor DolbyCP {
         var parsedOk = false
         do {
             try await transport.sendLine(line)
+            record("send \(line)")
         } catch {
-            mark(.missing)
+            record("send failed: \(line) (\(error))")
+            mark(.missing, "send failed")
             return (nil, false)
         }
         try? await Task.sleep(for: .seconds(gap))
-        response = await transport.readLine(timeout: timeout)
+        response = await readLogged(timeout: timeout)
         if model == .cp650, let echo = response, sameScalars(echo, line) {
-            response = await transport.readLine(timeout: timeout)   // the CP650 echo
+            response = await readLogged(timeout: timeout)   // the CP650 echo
         }
         var pairs: [ResponsePair] = []
         if let reply = response {
@@ -397,10 +405,11 @@ public actor DolbyCP {
             var skipped = 0
             while !pairs.contains(where: { sameScalars($0.param, expect) }) {
                 if skipped >= Self.resyncMax {
+                    record("gave up looking for \(expect) after \(skipped) other lines")
                     response = nil
                     break
                 }
-                response = await transport.readLine(timeout: timeout)
+                response = await readLogged(timeout: timeout)
                 guard let reply = response else { break }
                 gotLine = true
                 skipped += 1
@@ -412,7 +421,7 @@ public actor DolbyCP {
             mark(.ok)
             lastActivity = .now
         } else if !gotLine {
-            mark(.missing)
+            mark(.missing, "no reply to \(line) within \(timeout) s")
         }
         return (response, true)
     }
@@ -425,10 +434,29 @@ public actor DolbyCP {
         return pairs.isEmpty || pairs.contains { sameScalars($0.param, param) }
     }
 
-    private func mark(_ newStatus: ProcessorStatus) {
+    private func mark(_ newStatus: ProcessorStatus, _ why: String = "") {
         let changed = newStatus != state.status
+        if changed { record("status \(state.status) -> \(newStatus)\(why.isEmpty ? "" : " (\(why))")") }
         state.mark(newStatus)
         if changed { statusContinuation.yield(newStatus) }
+    }
+
+    /// Send every event of the link (status changes with their reason, lines
+    /// sent and received, timeouts, reconnects) to `sink`, for diagnostics.
+    /// Pass nil to stop.
+    public func setEventLog(_ sink: (@Sendable (String) -> Void)?) {
+        eventLog = sink
+    }
+
+    private func record(_ text: @autoclosure () -> String) {
+        eventLog?(text())
+    }
+
+    /// One line from the link, noted in the event log.
+    private func readLogged(timeout: Double) async -> String? {
+        let line = await transport.readLine(timeout: timeout)
+        record("recv \(line ?? "<nothing within \(timeout) s>")")
+        return line
     }
 
     // MARK: - One command in flight (FIFO)

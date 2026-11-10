@@ -9,7 +9,7 @@
 # itself: macOS builds are always done locally.
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.0.1"
 BUNDLE_VERSION="1"
 APP_NAME="CPRemote"
 
