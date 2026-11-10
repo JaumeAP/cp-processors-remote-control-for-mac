@@ -52,6 +52,17 @@ struct CPRemoteApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .commands {
+            CommandMenu("Level") {
+                Button("Level Up") { model.stepKnob(up: true) }
+                    .keyboardShortcut(.upArrow, modifiers: .command)
+                    .disabled(!model.isConnected)
+                Button("Level Down") { model.stepKnob(up: false) }
+                    .keyboardShortcut(.downArrow, modifiers: .command)
+                    .disabled(!model.isConnected)
+                Button("Reference 7.0") { model.setReference() }
+                    .keyboardShortcut("0")
+                    .disabled(!model.isConnected)
+            }
             CommandMenu("Setup") {
                 Button("Processor IP…") { model.showSetup = true }
                     .keyboardShortcut(",", modifiers: [.command, .shift])
