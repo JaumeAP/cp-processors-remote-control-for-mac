@@ -9,8 +9,8 @@
 # itself: macOS builds are always done locally.
 set -euo pipefail
 
-VERSION="1.0.2"
-BUNDLE_VERSION="3"
+VERSION="1.0.3"
+BUNDLE_VERSION="4"
 APP_NAME="CPRemote"
 
 here="$(cd "$(dirname "$0")/.." && pwd)"   # the macos/ folder
@@ -48,6 +48,10 @@ cat > "$app/Contents/Info.plist" <<EOF
 EOF
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
+
+# The release notes of every version, as a PDF next to the app. The build stops
+# if the notes do not start with the version being built.
+swift "$here/scripts/make-release-notes-pdf.swift" "$here/RELEASE_NOTES.md" "$work/stage/Release Notes.pdf" "$VERSION"
 
 ln -s /Applications "$work/stage/Applications"
 dmg="$out/$APP_NAME-$VERSION.dmg"

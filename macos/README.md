@@ -28,6 +28,10 @@ swift run CPRemote
 
 Build the release app and a disk image with `scripts/make-dmg.sh <output-dir>`,
 and check a finished image with `scripts/check-dmg.sh <path.dmg> <version>`.
+The image also holds `Release Notes.pdf`, the changes of every version, made
+from `RELEASE_NOTES.md`: add the new version's entry at the top of that file
+before building (the build stops if the newest entry is not the version being
+built).
 The app is ad-hoc signed and not notarized: the first time, open it with
 Control-click, Open.
 
