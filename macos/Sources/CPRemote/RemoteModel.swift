@@ -219,7 +219,8 @@ final class RemoteModel: ObservableObject {
             Task { _ = try? await cp.set(Self.inputParam, .string(value), timeout: Self.setReplyTimeout) }
         } else {
             localChange["format_button"] = .now
-            Task { _ = try? await cp.set("format_button", .int(button), timeout: Self.setReplyTimeout) }
+            // The panel counts the buttons 1 to 8; the CP650 counts them 0 to 7.
+            Task { _ = try? await cp.set("format_button", .int(button - 1), timeout: Self.setReplyTimeout) }
         }
     }
 
@@ -457,10 +458,10 @@ final class RemoteModel: ObservableObject {
         start = .now
         if processorModel == .cp650 {
             if let reply = try? await cp.get("format_button"), isCurrent(cp),
-               let button = Int(reply),
+               let wireValue = Int(reply), (0...7).contains(wireValue),
                await mayApply("format_button", readStartedAt: start, on: cp), isCurrent(cp),
-               formatButton != button {
-                formatButton = button
+               formatButton != wireValue + 1 {
+                formatButton = wireValue + 1
             }
         } else if panel.inputs != nil, let reply = try? await cp.get(Self.inputParam), isCurrent(cp),
                   let index = panel.inputs?.firstIndex(of: reply),

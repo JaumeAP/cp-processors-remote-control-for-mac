@@ -1,5 +1,11 @@
 # CP Remote release notes
 
+## 1.0.6 (2026-11-10)
+- CP650: a query is now sent as `KEY=?`, the form Dolby's CP650 manual gives, instead of `KEY?`.
+- CP650: the format buttons are numbered 0 to 7 on the wire, as in the manual: button 1 sends `format_button=0` and button 8 sends `format_button=7`. Before, every format button selected the next one.
+- Not yet tested on a real CP650; both changes follow the manual as read from public copies.
+- Everything in 1.0.5 is included.
+
 ## 1.0.5 (2026-11-10)
 - The CP750 front panel: the input-select names no longer run into each other, "NonSync" and "Mic" line up with the two-line names, and "Input Select" moved to the foot of the panel.
 - Everything in 1.0.4 is included.
