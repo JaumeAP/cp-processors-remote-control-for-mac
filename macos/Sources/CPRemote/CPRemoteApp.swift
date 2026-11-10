@@ -32,7 +32,8 @@ struct CPRemoteApp: App {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { notification in
                 var detail = ""
                 if let window = notification.object as? NSWindow {
-                    detail = " (window \(window.occlusionState.contains(.visible) ? "visible" : "covered"))"
+                    let visible = MainActor.assumeIsolated { window.occlusionState.contains(.visible) }
+                    detail = " (window \(visible ? "visible" : "covered"))"
                 }
                 log.write("ui: \(notification.name.rawValue)\(detail)")
             }

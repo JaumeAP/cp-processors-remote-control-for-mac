@@ -20,8 +20,8 @@
 3. `LineBuffer`: splits incoming bytes into lines.
 4. `WireProtocol`: the command framing. The CP650 uses `KEY=VALUE` and
    `KEY?`; the other models use `param value` and `param ?`.
-5. `ProcessorModel`: each model's port, framing, gap between commands and
-   connection limit.
+5. `ProcessorModel`: each model's port and framing, and (with `ProtocolTiming`)
+   the gap between commands.
 6. `CommandQueue`: the SETs waiting to be sent. A SET to a parameter already
    queued replaces it, so only the newest value goes out. The queue is
    bounded.

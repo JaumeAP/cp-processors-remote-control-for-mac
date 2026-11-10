@@ -388,7 +388,11 @@ public actor DolbyCP {
         } catch {
             record("send failed: \(line) (\(error))")
             mark(.missing, "send failed")
-            return (nil, false)
+            // A write that timed out may already have put part or all of the
+            // line on the wire. Report it as sent, so the SET is not queued
+            // again: a second copy could repeat it, or follow a truncated
+            // fragment on a serial line. The next poll shows the real state.
+            return (nil, Self.isWriteTimeout(error))
         }
         try? await Task.sleep(for: .seconds(gap))
         response = await readLogged(timeout: timeout)
@@ -474,6 +478,12 @@ public actor DolbyCP {
         await acquire()
         defer { release() }
         return await transport.connect()
+    }
+
+    private static func isWriteTimeout(_ error: any Error) -> Bool {
+        if let failure = error as? TCPTransport.Failure, case .writeTimedOut = failure { return true }
+        if let failure = error as? SerialTransport.Failure, case .writeTimedOut = failure { return true }
+        return false
     }
 
     private func acquire() async {

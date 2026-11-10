@@ -16,6 +16,8 @@ private final class PtyRelay: @unchecked Sendable {
     let simPath: String
     let clientPath: String
     private let stopped = Locked(false)
+    private let closed = Locked(false)
+    private let finished = DispatchSemaphore(value: 0)
     private let thread: Thread
 
     init() throws {
@@ -29,7 +31,11 @@ private final class PtyRelay: @unchecked Sendable {
         clientPath = cp
         let stopFlag = stopped
         let a = sm, b = cm
-        thread = Thread { PtyRelay.relay(a, b, stopFlag) }
+        let done = finished
+        thread = Thread {
+            PtyRelay.relay(a, b, stopFlag)
+            done.signal()
+        }
         thread.start()
     }
 
@@ -60,8 +66,12 @@ private final class PtyRelay: @unchecked Sendable {
     }
 
     func stop() {
+        // Once: the test stops the relay and the deinit stops it again.
+        guard !closed.withLock({ let was = $0; $0 = true; return was }) else { return }
         stopped.withLock { $0 = true }
-        thread.cancel()
+        // Wait for the relay thread to leave poll() and read() before the
+        // descriptors are closed, so a reused descriptor number is never read.
+        _ = finished.wait(timeout: .now() + 2)
         close(simMaster)
         close(clientMaster)
         close(simSlave)
