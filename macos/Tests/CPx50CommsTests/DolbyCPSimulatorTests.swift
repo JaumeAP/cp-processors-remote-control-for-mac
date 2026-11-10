@@ -148,6 +148,19 @@ struct DolbyCPLinkTests {
         await cp.disconnect()
     }
 
+    @Test func reconnectPausesBetweenCloseAndOpen() async throws {
+        let sim = try await Simulator()
+        defer { sim.stop() }
+        let cp = fastClient(sim.port)
+        #expect(await cp.connect())
+        await cp.setReopenPause(0.6)
+        let start = ContinuousClock.now
+        #expect(await cp.reconnect())
+        #expect(start.duration(to: .now) >= .seconds(0.6), "the reopen must wait for the pause")
+        #expect(try await cp.get("mute", timeout: 0.5) == "0")
+        await cp.disconnect()
+    }
+
     @Test func unknownParamTimesOutAndTheLinkStillWorks() async throws {
         let sim = try await Simulator()
         defer { sim.stop() }

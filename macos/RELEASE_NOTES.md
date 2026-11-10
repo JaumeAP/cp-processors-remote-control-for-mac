@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.0.7 (2026-11-10)
+- CP650: after a link is closed, the app waits two seconds before opening the next one (on Reconnect, on Save and Connect, and when it reopens a hung link), so the unit can drop the old session first. The CP650 takes a single connection; the Q-SYS plugin does the same. Not yet tested on a real CP650.
+- Everything in 1.0.6 is included.
+
 ## 1.0.6 (2026-11-10)
 - CP650: a query is now sent as `KEY=?`, the form Dolby's CP650 manual gives, instead of `KEY?`.
 - CP650: the format buttons are numbered 0 to 7 on the wire, as in the manual: button 1 sends `format_button=0` and button 8 sends `format_button=7`. Before, every format button selected the next one.
