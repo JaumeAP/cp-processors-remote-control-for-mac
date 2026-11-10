@@ -62,6 +62,30 @@ struct CPRemoteApp: App {
                 Button("Reference 7.0") { model.setReference() }
                     .keyboardShortcut("0")
                     .disabled(!model.isConnected)
+                Divider()
+                Toggle("Show Level in dB", isOn: Binding(get: { model.levelInDecibels },
+                                                         set: { _ in model.toggleLevelUnit() }))
+                    .keyboardShortcut("d")
+            }
+            CommandMenu("Macro") {
+                if let macros = model.macros {
+                    ForEach(Array(macros.prefix(9).enumerated()), id: \.element.number) { index, macro in
+                        Toggle("\(macro.number): \(macro.name)",
+                               isOn: Binding(get: { model.macroPreset == macro.number },
+                                             set: { _ in model.selectMacro(macro.number) }))
+                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
+                            .disabled(!model.isConnected)
+                    }
+                    Divider()
+                    Button("Next Macro") { model.stepMacro(by: 1) }
+                        .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                        .disabled(!model.isConnected)
+                    Button("Previous Macro") { model.stepMacro(by: -1) }
+                        .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                        .disabled(!model.isConnected)
+                } else {
+                    Text("No macros on this processor")
+                }
             }
             CommandMenu("Setup") {
                 Button("Processor IP…") { model.showSetup = true }

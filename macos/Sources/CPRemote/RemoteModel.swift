@@ -18,6 +18,9 @@ struct PanelProfile {
     let inputs: [String]?
     /// Lowest value the fader takes on the wire, in tenths (CP950: 1 to 100).
     let faderMinimum: Int
+    /// The parameter that names the selected macro, shown on the screen
+    /// (CP850 / CP950 / CP950A).
+    var macroName: String? = nil
 }
 
 extension ProcessorModel {
@@ -30,7 +33,8 @@ extension ProcessorModel {
                          inputs: ["dig_1", "dig_2", "dig_3", "dig_4", "analog", "non_sync", "mic"],
                          faderMinimum: 0)
         case .cp850, .cp950, .cp950a:
-            PanelProfile(fader: "sys.fader", mute: "sys.mute", inputs: nil, faderMinimum: 1)
+            PanelProfile(fader: "sys.fader", mute: "sys.mute", inputs: nil, faderMinimum: 1,
+                         macroName: "sys.macro_name")
         }
     }
 }
@@ -75,6 +79,25 @@ final class RemoteModel: ObservableObject {
     /// The format number programmed on each button, from the processor's
     /// `format_list`; nil until it reports eight entries.
     @Published private(set) var programmedFormats: [String]?
+    /// The selected macro's name, read from the processor (CP850 / CP950 / CP950A).
+    @Published private(set) var macroName: String?
+    @Published private(set) var macroPreset: Int?
+    /// The macros the processor offers, in its order (CP850 / CP950 / CP950A).
+    @Published private(set) var macros: [Macro]?
+    private var macroMisses = 0
+    private var macroListDue = true
+
+    struct Macro: Equatable, Sendable {
+        let number: Int
+        let name: String
+    }
+
+    static let macroPresetParam = "sys.macro_preset"
+    static let macroListParam = "sys.macros"
+
+    /// Show the level in decibels (7.0 is 0 dB) instead of the fader number.
+    @Published private(set) var levelInDecibels = false
+    private static let decibelsKey = "levelInDecibels"
     @Published private(set) var muted = false
     @Published private(set) var status: ProcessorStatus = .missing
     @Published private(set) var message = "Not connected"
@@ -120,6 +143,7 @@ final class RemoteModel: ObservableObject {
         self.port = port
         self.log = log
         host = defaults.string(forKey: Self.hostKey) ?? ""
+        levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
         processorModel = defaults.string(forKey: Self.modelKey)
             .flatMap { try? ProcessorModel(name: $0) } ?? .cp650
     }
@@ -242,6 +266,47 @@ final class RemoteModel: ObservableObject {
 
     static func faderText(_ value: Double) -> String { String(format: "%.1f", value) }
 
+    /// The fader scale of the Dolby processors: 0.0 to 4.0 in steps of 20 dB
+    /// from -90 to -10 dB, then 3 1/3 dB per unit up to +10 dB at 10;
+    /// 7.0 is 0 dB (the CP650 and CP750 manuals, read from public copies).
+    static func decibels(forFader fader: Double) -> Double {
+        fader < 4 ? -90 + 20 * fader : (fader - 7) * 10 / 3
+    }
+
+    /// The level as shown: the fader number, or decibels with a sign.
+    static func levelText(_ fader: Double, decibels: Bool) -> String {
+        guard decibels else { return faderText(fader) }
+        let value = (Self.decibels(forFader: fader) * 10).rounded() / 10
+        return value == 0 ? "0.0" : String(format: "%+.1f", value)
+    }
+
+    var levelText: String { Self.levelText(fader, decibels: levelInDecibels) }
+
+    /// The level with its unit, for the screens.
+    var levelTextWithUnit: String { levelInDecibels ? levelText + " dB" : levelText }
+
+    func toggleLevelUnit() {
+        levelInDecibels.toggle()
+        defaults.set(levelInDecibels, forKey: Self.decibelsKey)
+    }
+
+    /// Select a macro of the processor (CP850 / CP950 / CP950A).
+    func selectMacro(_ number: Int) {
+        guard let cp = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
+        macroPreset = number
+        if let name = macros?.first(where: { $0.number == number })?.name { macroName = name }
+        localChange[Self.macroPresetParam] = .now
+        localChange[nameParam] = .now
+        Task { _ = try? await cp.set(Self.macroPresetParam, .int(number), timeout: Self.setReplyTimeout) }
+    }
+
+    /// The next (or previous) macro in the processor's list, wrapping round.
+    func stepMacro(by delta: Int) {
+        guard let macros, !macros.isEmpty else { return }
+        let index = macros.firstIndex { $0.number == macroPreset } ?? (delta > 0 ? -1 : 0)
+        selectMacro(macros[(index + delta + macros.count) % macros.count].number)
+    }
+
     /// The name shown for a choice in Setup.
     static func choiceName(_ model: ProcessorModel) -> String {
         model == .cp950 ? "CP850 / CP950" : model.rawValue
@@ -307,7 +372,12 @@ final class RemoteModel: ObservableObject {
         processorHost = address
         localChange = [:]
         formatListDue = true
+        macroListDue = true
         silentPolls = 0
+        macroName = nil
+        macroPreset = nil
+        macros = nil
+        macroMisses = 0
         message = "Connecting to \(address)…"
         statusTask = Task { [weak self] in
             for await value in cp.statusUpdates {
@@ -330,6 +400,7 @@ final class RemoteModel: ObservableObject {
         message = "Reconnecting to \(trimmedHost)…"
         panelRead = false
         formatListDue = true
+        macroListDue = true
         _ = await cp.reconnect()
         guard processor === cp else { return }
         apply(status: await cp.status)
@@ -347,6 +418,9 @@ final class RemoteModel: ObservableObject {
         processor = nil
         processorHost = nil
         programmedFormats = nil
+        macroName = nil
+        macroPreset = nil
+        macros = nil
         apply(status: .missing)
         message = "Not connected"
         await cp.disconnect()
@@ -421,6 +495,7 @@ final class RemoteModel: ObservableObject {
             note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
             formatListDue = true
+            macroListDue = true
         }
         await refresh(cp)
     }
@@ -451,6 +526,7 @@ final class RemoteModel: ObservableObject {
                 note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
                 silentPolls = 0
                 formatListDue = true
+                macroListDue = true
                 linkReopens += 1
                 _ = await cp.reconnect()
             }
@@ -490,6 +566,42 @@ final class RemoteModel: ObservableObject {
            await mayApply(panel.mute, readStartedAt: start, on: cp), isCurrent(cp),
            muted != (reply == "1") {
             muted = reply == "1"
+        }
+
+        // The selected macro, for the screen: its number every poll, its name
+        // when the number changes, the list once per link. A processor that
+        // never answers is given up on after two misses (each costs a read
+        // timeout).
+        if let nameParam = panel.macroName, macroMisses < 2, isCurrent(cp) {
+            start = .now
+            if let reply = try? await cp.get(Self.macroPresetParam), isCurrent(cp) {
+                if let number = Int(reply.trimmingCharacters(in: .whitespaces)),
+                   await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp),
+                   macroPreset != number || macroName == nil {
+                    start = .now
+                    if let name = try? await cp.get(nameParam), isCurrent(cp),
+                       await mayApply(nameParam, readStartedAt: start, on: cp), isCurrent(cp) {
+                        macroPreset = number
+                        macroName = name.trimmingCharacters(in: .whitespaces)
+                    } else {
+                        macroMisses += 1
+                    }
+                }
+            } else {
+                macroMisses += 1
+            }
+            if macroListDue, macroMisses < 2, isCurrent(cp) {
+                macroListDue = false
+                if let lines = try? await cp.getList(Self.macroListParam), isCurrent(cp) {
+                    let parsed: [Macro] = lines.compactMap { line in
+                        guard let colon = line.firstIndex(of: ":"),
+                              let number = Int(line[..<colon].trimmingCharacters(in: .whitespaces)) else { return nil }
+                        let name = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                        return name.isEmpty ? nil : Macro(number: number, name: name)
+                    }
+                    macros = parsed.isEmpty ? nil : parsed
+                }
+            }
         }
 
         // The CP650's programmed formats change only in setup: one attempt

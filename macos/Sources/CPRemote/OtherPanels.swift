@@ -128,8 +128,12 @@ struct CP750Panel: View {
                 g.rect(0.55, 0.69, 0.025, 0.12, fill: Color(white: 0.25), radius: 2)
                 // The display: the fader level, as the unit shows it.
                 g.disc(0.28, 0.53, 0.72, fill: frontDark)
-                g.label("Volume \(RemoteModel.faderText(model.fader))", 0.28, 0.5, size: 0.1, width: 0.15,
+                g.label("Volume \(model.levelTextWithUnit)", 0.28, 0.5, size: 0.1, width: 0.15,
                         weight: .regular, color: Color(white: 0.7))
+                    .onTapGesture { model.toggleLevelUnit() }
+                    .accessibilityLabel("Volume \(model.levelTextWithUnit)")
+                    .accessibilityHint("Switches between the fader number and decibels")
+                    .accessibilityAddTraits(.isButton)
                 g.label(model.currentInputName, 0.28, 0.6, size: 0.07, width: 0.12, weight: .regular,
                         color: Color(white: 0.5))
                 // The main fader knob, to the right of the display: live.
@@ -161,8 +165,32 @@ struct CP950Panel: View {
                 // The touch screen: the fader level, and the speaker icon that
                 // mutes (the manual's soft button for it).
                 g.rect(0.52, 0.48, 0.209, 0.558, fill: Color(red: 0.05, green: 0.07, blue: 0.1), radius: g.h * 0.03)
-                g.label("FADER \(RemoteModel.faderText(model.fader))", 0.52, 0.36, size: 0.075, width: 0.18,
+                g.label("FADER \(model.levelTextWithUnit)", 0.535, 0.36, size: model.levelInDecibels ? 0.06 : 0.075, width: 0.15,
                         weight: .bold, color: Color(white: 0.85))
+                    .onTapGesture { model.toggleLevelUnit() }
+                    .accessibilityLabel("Fader \(model.levelTextWithUnit)")
+                    .accessibilityHint("Switches between the fader number and decibels")
+                    .accessibilityAddTraits(.isButton)
+                if let macros = model.macros {
+                    // The macros the unit offers; the selected one is white.
+                    ForEach(Array(macros.prefix(8).enumerated()), id: \.element.number) { index, macro in
+                        let selected = macro.number == model.macroPreset
+                        g.put(0.52, 0.45 + 0.042 * CGFloat(index), Button { model.selectMacro(macro.number) } label: {
+                            Text("\(selected ? "\u{25B8} " : "")\(macro.name)")
+                                .font(.system(size: g.h * 0.036, weight: selected ? .bold : .regular))
+                                .foregroundStyle(selected ? Color.white : Color(white: 0.6))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .frame(width: g.w * 0.19, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!model.isConnected)
+                        .accessibilityLabel("Macro \(macro.number): \(macro.name)")
+                        .accessibilityAddTraits(selected ? .isSelected : []))
+                    }
+                } else if let macro = model.macroName {
+                    g.label(macro, 0.52, 0.5, size: 0.06, width: 0.19, weight: .regular, color: Color(white: 0.7))
+                }
                 g.put(0.44, 0.36, Button { model.toggleMute() } label: {
                     Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: g.h * 0.07))
