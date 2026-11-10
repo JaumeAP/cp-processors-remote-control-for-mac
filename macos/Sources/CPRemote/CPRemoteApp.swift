@@ -11,6 +11,32 @@ struct CPRemoteApp: App {
     init() {
         // Run as a regular app (menu bar, Dock icon) even from `swift run`.
         NSApplication.shared.setActivationPolicy(.regular)
+        Self.logAppAndWindowEvents()
+    }
+
+    /// Note in the connection log when the app gains or loses focus and when
+    /// its window is key, covered or about to move: clicks outside the
+    /// buttons show up as these events, and they are what a lost connection
+    /// has to be compared with.
+    private static func logAppAndWindowEvents() {
+        let log = ConnectionLog.shared
+        let info = ProcessInfo.processInfo
+        log.write("start: CP Remote \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unversioned"), "
+                  + "macOS \(info.operatingSystemVersionString)")
+        let names: [Notification.Name] = [
+            NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+            NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+            NSWindow.didChangeOcclusionStateNotification, NSWindow.willMoveNotification,
+        ]
+        for name in names {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { notification in
+                var detail = ""
+                if let window = notification.object as? NSWindow {
+                    detail = " (window \(window.occlusionState.contains(.visible) ? "visible" : "covered"))"
+                }
+                log.write("ui: \(notification.name.rawValue)\(detail)")
+            }
+        }
     }
 
     var body: some Scene {
@@ -31,6 +57,11 @@ struct CPRemoteApp: App {
                 Button("Reconnect") { Task { await model.reconnect() } }
                     .keyboardShortcut("r")
                 Button("Disconnect") { Task { await model.disconnect() } }
+                Divider()
+                Button("Show Connection Log") {
+                    ConnectionLog.shared.flush()
+                    NSWorkspace.shared.activateFileViewerSelecting([ConnectionLog.shared.url])
+                }
             }
         }
     }

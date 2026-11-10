@@ -26,9 +26,18 @@ swift build
 swift run CPRemote
 ```
 
-Build the release app and a disk image with `scripts/make-dmg.sh <output-dir>`.
+Build the release app and a disk image with `scripts/make-dmg.sh <output-dir>`,
+and check a finished image with `scripts/check-dmg.sh <path.dmg> <version>`.
 The app is ad-hoc signed and not notarized: the first time, open it with
 Control-click, Open.
+
+## Connection log
+
+The app writes what it and its link to the processor do to
+`~/Library/Logs/CP Remote/connection.log`: the lines sent and received, status
+changes with their reason, timeouts, reconnects, and the app's focus and window
+events. It rotates at 1 MB. **Setup, Show Connection Log** reveals the file.
+If the link to a processor misbehaves, send that file.
 
 ## Tests
 

@@ -52,6 +52,11 @@ final class RemoteModel: ObservableObject {
     /// Unanswered fader reads in a row after which a link that is still open
     /// is closed and opened again (a hung control session).
     private static let silentPollLimit = 2
+    /// How long a SET may wait for its reply. The client's default, 0.5 s, is
+    /// too short for a real unit: a mute fades and a format change reconfigures
+    /// it, and a reply slower than the timeout is taken as a lost link, which
+    /// disables the controls for seconds.
+    private static let setReplyTimeout: Double = 3
     private static let hostKey = "processorHost"
     private static let modelKey = "processorModel"
     /// The models the Setup menu offers. CP850 and CP950 share one front.
@@ -107,9 +112,13 @@ final class RemoteModel: ObservableObject {
     private let defaults: UserDefaults
     let port: UInt16?
 
-    init(defaults: UserDefaults = .standard, port: UInt16? = nil) {
+    /// Where the app and its link write their events; nil for none (tests).
+    private let log: ConnectionLog?
+
+    init(defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared) {
         self.defaults = defaults
         self.port = port
+        self.log = log
         host = defaults.string(forKey: Self.hostKey) ?? ""
         processorModel = defaults.string(forKey: Self.modelKey)
             .flatMap { try? ProcessorModel(name: $0) } ?? .cp650
@@ -207,10 +216,10 @@ final class RemoteModel: ObservableObject {
             guard inputs.indices.contains(button - 1) else { return }
             localChange[Self.inputParam] = .now
             let value = inputs[button - 1]
-            Task { _ = try? await cp.set(Self.inputParam, .string(value)) }
+            Task { _ = try? await cp.set(Self.inputParam, .string(value), timeout: Self.setReplyTimeout) }
         } else {
             localChange["format_button"] = .now
-            Task { _ = try? await cp.set("format_button", .int(button)) }
+            Task { _ = try? await cp.set("format_button", .int(button), timeout: Self.setReplyTimeout) }
         }
     }
 
@@ -221,7 +230,7 @@ final class RemoteModel: ObservableObject {
         muted.toggle()
         localChange[processorModel.panel.mute] = .now
         let value = muted ? 1 : 0
-        Task { _ = try? await cp.set(processorModel.panel.mute, .int(value)) }
+        Task { _ = try? await cp.set(processorModel.panel.mute, .int(value), timeout: Self.setReplyTimeout) }
     }
 
     static func faderText(_ value: Double) -> String { String(format: "%.1f", value) }
@@ -262,6 +271,11 @@ final class RemoteModel: ObservableObject {
         await task.value
     }
 
+    /// One line in the connection log.
+    private func note(_ text: String) {
+        log?.write("app: \(text)")
+    }
+
     private func connectNow() async {
         await disconnectNow()
         let address = trimmedHost
@@ -271,6 +285,8 @@ final class RemoteModel: ObservableObject {
             return
         }
         let cp = DolbyCP(host: address, port: port, model: processorModel, autoReconnect: true)
+        note("connect to \(address) as \(processorModel.rawValue)")
+        if let log { await cp.setEventLog { line in log.write("link: \(line)") } }
         processor = cp
         processorHost = address
         localChange = [:]
@@ -294,6 +310,7 @@ final class RemoteModel: ObservableObject {
         guard let cp = processor, processorHost == trimmedHost, cp.model == processorModel else {
             return await connectNow()
         }
+        note("reconnect requested")
         message = "Reconnecting to \(trimmedHost)…"
         panelRead = false
         formatListDue = true
@@ -310,6 +327,7 @@ final class RemoteModel: ObservableObject {
         pendingFader = nil
         endKnobTurn()
         guard let cp = processor else { return }
+        note("disconnect requested")
         processor = nil
         processorHost = nil
         programmedFormats = nil
@@ -322,6 +340,7 @@ final class RemoteModel: ObservableObject {
     /// controls until the panel has been read again, ends a knob turn, and
     /// is announced to VoiceOver.
     private func apply(status value: ProcessorStatus) {
+        note("status \(value), panel read \(panelRead)")
         status = value
         if value != .ok {
             panelRead = false
@@ -350,7 +369,7 @@ final class RemoteModel: ObservableObject {
         pendingFader = nil
         faderInFlight = true
         Task {
-            _ = try? await cp.set(processorModel.panel.fader, .int(value))
+            _ = try? await cp.set(processorModel.panel.fader, .int(value), timeout: Self.setReplyTimeout)
             faderInFlight = false
             pumpFader()
         }
@@ -378,7 +397,9 @@ final class RemoteModel: ObservableObject {
             // The client's own watchdog runs only after a successful
             // connect: retry here, so a processor that was off, booting or
             // unreachable at connect time is found when it comes up.
+            note("link is down: reconnecting")
             let ok = await cp.reconnect()
+            note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
             formatListDue = true
         }
@@ -406,7 +427,9 @@ final class RemoteModel: ObservableObject {
             // Unanswered: after a few in a row, reopen a link that is open
             // but hung, and skip the other reads (each would time out too).
             silentPolls += 1
+            note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit))")
             if silentPolls >= Self.silentPollLimit {
+                note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
                 silentPolls = 0
                 formatListDue = true
                 linkReopens += 1
@@ -422,6 +445,7 @@ final class RemoteModel: ObservableObject {
             }
             if isCurrent(cp), !panelRead {
                 panelRead = true
+                note("panel read: controls enabled")
                 announceConnectionChange()
             }
         }

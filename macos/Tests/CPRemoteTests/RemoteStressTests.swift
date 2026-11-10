@@ -5,17 +5,25 @@
 // accepts the link but never answers. After each storm the processor must
 // hold exactly the value the panel shows.
 
+import AppKit
 import CPx50Comms
 import Foundation
+import SwiftUI
 import Testing
 @testable import CPRemote
 
 // MARK: - Simulator
 
-/// `$CPSIM_BIN`: the simulator binary.
+/// `$CPSIM_BIN`, else `cpp/build/processor_sim` in this checkout.
 private let simulatorPath: String? = {
-    guard let env = ProcessInfo.processInfo.environment["CPSIM_BIN"], !env.isEmpty else { return nil }
-    return FileManager.default.isExecutableFile(atPath: env) ? env : nil
+    if let env = ProcessInfo.processInfo.environment["CPSIM_BIN"], !env.isEmpty {
+        return FileManager.default.isExecutableFile(atPath: env) ? env : nil
+    }
+    let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+    let path = repo.appendingPathComponent("cpp/build/processor_sim").path
+    return FileManager.default.isExecutableFile(atPath: path) ? path : nil
 }()
 
 private final class Locked<Value>: @unchecked Sendable {
@@ -138,7 +146,7 @@ private func makeModel(_ sim: Simulator) -> RemoteModel {
     let suite = "CPRemoteTests"
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
-    let model = RemoteModel(defaults: defaults, port: sim.port)
+    let model = RemoteModel(defaults: defaults, port: sim.port, log: nil)
     model.host = "127.0.0.1"
     model.choose(sim.model)
     return model
@@ -200,7 +208,7 @@ private func settles(_ model: RemoteModel, _ sim: Simulator, on expected: String
 // MARK: - Tests
 
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
 struct RemoteStressTests {
     /// Values unlike the model's defaults, so a read is told from no read.
     @Test func connectReadsThePanel() async throws {
@@ -529,7 +537,7 @@ struct RemoteStressTests {
         first.stop()
         let suite = UserDefaults(suiteName: "CPRemoteTests")!
         suite.removePersistentDomain(forName: "CPRemoteTests")
-        let model = RemoteModel(defaults: suite, port: port)
+        let model = RemoteModel(defaults: suite, port: port, log: nil)
         model.host = "127.0.0.1"
         await model.connect()
         #expect(!model.isConnected)
@@ -625,7 +633,7 @@ struct RemoteStressTests {
 /// parameter names and scales, as their manuals give them, against the
 /// simulator.
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
 struct OtherProcessorTests {
     @Test func cp750ReadsAndDrivesItsPanel() async throws {
         let sim = try await Simulator(model: .cp750)
@@ -680,7 +688,7 @@ struct OtherProcessorTests {
 /// Every front-panel control of each processor, pressed one by one against
 /// the simulator, and the processor's own value checked for each.
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
 struct EveryControlTests {
     @Test func cp650EveryFormatButtonAndMute() async throws {
         let sim = try await Simulator(model: .cp650)
@@ -740,6 +748,195 @@ struct EveryControlTests {
         #expect(await eventually { await probe(sim, "sys.mute") == "1" })
         model.toggleMute()
         #expect(await eventually { await probe(sim, "sys.mute") == "0" })
+        await model.disconnect()
+    }
+}
+
+/// The CP850 and CP950A, each against the simulator with its own names and
+/// values, the same checks as the CP950.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct CP850AndCP950ATests {
+    @Test(arguments: [ProcessorModel.cp850, .cp950a])
+    func readsDrivesAndMutes(_ processor: ProcessorModel) async throws {
+        let sim = try await Simulator(model: processor)
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected })
+        #expect(model.fader == 7.0)
+        #expect(model.muted == false)
+
+        model.setFader(4.5)
+        #expect(await eventually(10) { await probe(sim, "sys.fader") == "45" })
+        model.setFader(0)
+        #expect(await eventually(10) { await probe(sim, "sys.fader") == "1" })
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "sys.mute") == "1" })
+        #expect(model.muted)
+        await model.disconnect()
+    }
+}
+
+/// The app's choices survive a restart: the model and the address are stored
+/// in the defaults and read back by a new model.
+@MainActor
+@Suite struct PersistenceTests {
+    @Test func modelAndAddressAreRemembered() {
+        let suite = "CPRemoteTests.persistence"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let first = RemoteModel(defaults: defaults, log: nil)
+        first.host = "10.0.0.5"
+        first.choose(.cp750)
+        let second = RemoteModel(defaults: defaults, log: nil)
+        #expect(second.host == "10.0.0.5")
+        #expect(second.processorModel == .cp750)
+        defaults.removePersistentDomain(forName: suite)
+    }
+
+    @Test func unknownStoredModelFallsBackToTheCP650() {
+        let suite = "CPRemoteTests.fallback"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set("CP999", forKey: "processorModel")
+        #expect(RemoteModel(defaults: defaults, log: nil).processorModel == .cp650)
+        defaults.removePersistentDomain(forName: suite)
+    }
+}
+
+/// A cut link is found again by the app, with its values intact.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct ReconnectAfterCutTests {
+    @Test func valuesSurviveACutLink() async throws {
+        let sim = try await Simulator()
+        defer { sim.stop() }
+        let model = try await connected(sim)
+        model.setFader(4.5)
+        #expect(await eventually(10) { await probe(sim, "fader_level") == "45" })
+        sim.dropConnections()
+        #expect(await eventually(20) { model.isConnected })
+        #expect(await eventually(10) { model.fader == 4.5 })
+        #expect(await probe(sim, "fader_level") == "45")
+        await model.disconnect()
+    }
+}
+
+/// Every front panel draws, the same way twice (a blank or unstable panel
+/// fails here). The pictures are not kept.
+@MainActor
+@Suite struct PanelRenderTests {
+    @Test(arguments: [ProcessorModel.cp650, .cp750, .cp950])
+    func frontDrawsDeterministically(_ processor: ProcessorModel) throws {
+        let model = RemoteModel(defaults: UserDefaults(suiteName: "CPRemoteTests.render")!, log: nil)
+        model.choose(processor)
+        let width: CGFloat = 900
+        let size = CGSize(width: width, height: width / processor.aspect)
+        func render() throws -> Data {
+            let renderer = ImageRenderer(content: FrontPanelView(model: model).frame(width: size.width, height: size.height))
+            renderer.scale = 1
+            let image = try #require(renderer.nsImage)
+            let tiff = try #require(image.tiffRepresentation)
+            let bitmap = try #require(NSBitmapImageRep(data: tiff))
+            return try #require(bitmap.representation(using: .png, properties: [:]))
+        }
+        let first = try render()
+        let second = try render()
+        #expect(first.count > 20_000, "a blank panel would be almost empty")
+        #expect(first == second, "the same state must draw the same picture")
+    }
+}
+
+/// The connection log: its file, its rotation, and what the app and its link
+/// write into it.
+@MainActor
+@Suite struct ConnectionLogTests {
+    private func temporaryFolder() -> URL {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CPRemoteLogTests-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    @Test func linesAreTimestampedAndKeptInOrder() throws {
+        let folder = temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let log = ConnectionLog(directory: folder)
+        log.write("first")
+        log.write("second")
+        log.flush()
+        let lines = try String(contentsOf: log.url, encoding: .utf8).split(separator: "\n")
+        #expect(lines.count == 2)
+        #expect(lines[0].hasSuffix(" first") && lines[1].hasSuffix(" second"))
+        // 2026-11-10T11:22:25.123Z: the time, to the millisecond, in UTC.
+        #expect(lines[0].range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z "#, options: .regularExpression) != nil)
+    }
+
+    @Test func theFileRotatesAndNeverGrowsWithoutLimit() throws {
+        let folder = temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let log = ConnectionLog(directory: folder, maximumBytes: 2_000)
+        for number in 0..<400 { log.write("line number \(number) with some padding to fill the file") }
+        log.flush()
+        let sizes = ["connection.log", "connection.log.1"].map {
+            (try? FileManager.default.attributesOfItem(atPath: folder.appendingPathComponent($0).path))?[.size] as? Int ?? 0
+        }
+        #expect(sizes[1] > 0, "the older file exists")
+        #expect(sizes[0] <= 2_000 + 200 && sizes[1] <= 2_000 + 200, "each file stays near the limit")
+        let newest = try String(contentsOf: log.url, encoding: .utf8)
+        #expect(newest.contains("line number 399"), "the newest line is kept")
+    }
+
+    /// Connect to the simulator with a real log: the file shows the lines the
+    /// link sent and received, the status change with its reason, and the
+    /// moment the panel was read.
+    @Test(.enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+    func appAndLinkWriteToTheLog() async throws {
+        let sim = try await Simulator()
+        defer { sim.stop() }
+        let folder = temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let log = ConnectionLog(directory: folder)
+        let suite = "CPRemoteTests.logging"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let model = RemoteModel(defaults: defaults, port: sim.port, log: log)
+        model.host = "127.0.0.1"
+        await model.connect()
+        #expect(await eventually { model.isConnected })
+        await model.disconnect()
+        log.flush()
+        let text = try String(contentsOf: log.url, encoding: .utf8)
+        for expected in ["app: connect to 127.0.0.1 as CP650", "link: connect succeeded",
+                         "link: status initializing -> ok (connect)", "link: send fader_level?",
+                         "link: recv fader_level=70", "app: panel read: controls enabled",
+                         "app: disconnect requested"] {
+            #expect(text.contains(expected), "missing: \(expected)")
+        }
+        defaults.removePersistentDomain(forName: suite)
+    }
+}
+
+/// A real unit can take more than half a second to answer a SET (a mute
+/// fades, a format change reconfigures it). That must not be taken as a lost
+/// link: the controls stay enabled and the change still arrives.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct SlowReplyTests {
+    @Test func aSlowReplyToASetKeepsTheControlsEnabled() async throws {
+        let sim = try await Simulator(control: true)
+        defer { sim.stop() }
+        let model = try await connected(sim)
+        #expect(await sim.command("set latency 0.8") == "OK\n")
+        model.toggleMute()
+        // Four seconds, long enough for the SET and the polls behind it.
+        for step in 0..<16 {
+            try await Task.sleep(for: .milliseconds(250))
+            #expect(model.isConnected, "controls disabled at \(step * 250) ms after the SET")
+        }
+        #expect(await sim.command("set latency 0") == "OK\n")
+        #expect(await eventually(10) { await probe(sim, "mute") == "1" })
         await model.disconnect()
     }
 }

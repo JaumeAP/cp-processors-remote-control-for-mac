@@ -44,6 +44,13 @@ answering, and an automatic reconnect with back-off.
    fronts. Positions are fractions of the panel, so they scale with the window.
 5. `SetupView`: the processor choice, the address and the Test button.
 
+## The connection log
+
+`DolbyCP.setEventLog` hands the library's events (status changes with their
+reason, every line sent and received, timeouts, reconnects) to a closure.
+`ConnectionLog` in the app writes them, with the app's own events and its
+focus and window events, to `~/Library/Logs/CP Remote/connection.log`.
+
 ## Concurrency
 
 1. The library is actors and `async` functions. `DolbyCP` serialises its
