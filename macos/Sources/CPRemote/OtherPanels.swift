@@ -106,13 +106,13 @@ struct CP750Panel: View {
                 g.label("CP750", 0.85, 0.13, size: 0.1, width: 0.12, weight: .heavy, italic: true, color: .white)
                 // The seven input-select keys, with their names above; the
                 // selected one lights.
-                g.label("Input Select", 0.76, 0.4, size: 0.06, width: 0.2, color: Color(white: 0.3))
-                let inputs = ["Digital\n1", "Digital\n2", "Digital\n3", "Digital\n4", "Multi-Ch\nAnalog", "NonSync", "Mic"]
+                g.label("Input Select", 0.763, 0.86, size: 0.06, width: 0.2, color: Color(white: 0.3))
+                let inputs = ["Digital\n1", "Digital\n2", "Digital\n3", "Digital\n4", "Multi-Ch\nAnalog", "\nNonSync", "\nMic"]
                 let inputX: [CGFloat] = [0.643, 0.685, 0.722, 0.763, 0.802, 0.843, 0.883]
                 ForEach(0..<7, id: \.self) { index in
                     g.put(inputX[index], 0.5, Key(diameter: g.h * 0.133, lit: model.formatButton == index + 1 ? .white : nil,
                                                  enabled: model.isConnected) { model.pressButton(index + 1) })
-                    g.label(inputs[index], inputX[index], 0.3, size: 0.06, width: 0.045,
+                    g.label(inputs[index], inputX[index], 0.31, size: 0.05, width: 0.038,
                             weight: .bold, color: Color(white: 0.2))
                 }
                 // The four Valid lamps under the inputs (no wire command here).

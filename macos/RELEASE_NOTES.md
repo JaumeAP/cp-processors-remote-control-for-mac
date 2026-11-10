@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.0.5 (2026-11-10)
+- The CP750 front panel: the input-select names no longer run into each other, "NonSync" and "Mic" line up with the two-line names, and "Input Select" moved to the foot of the panel.
+- Everything in 1.0.4 is included.
+
 ## 1.0.4 (2026-11-10)
 - A change whose write to the unit timed out is no longer sent a second time: the line could already be on the wire, and a second copy could repeat it or follow a fragment on a serial line.
 - The app has an icon, and macOS can now say why the app asks to reach the local network.
