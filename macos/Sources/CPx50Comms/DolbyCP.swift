@@ -141,7 +141,18 @@ public actor DolbyCP {
         defer { leaveLifecycle() }
         await stopBackground()
         await closeLocked()
+        await pauseBeforeReopen()
         return await connectUnlocked()
+    }
+
+    /// Seconds to wait between closing a link and opening the next one, so a
+    /// processor that takes a single connection has dropped the old session
+    /// first (the Q-SYS plugin waits two seconds). Zero by default.
+    public func setReopenPause(_ seconds: Double) { reopenPause = max(0, seconds) }
+    private var reopenPause: Double = 0
+
+    private func pauseBeforeReopen() async {
+        if reopenPause > 0 { try? await Task.sleep(for: .seconds(reopenPause)) }
     }
 
     /// Stop the background tasks, close the link, status missing.
@@ -346,6 +357,8 @@ public actor DolbyCP {
         // must not reopen the link.
         guard !Task.isCancelled else { return false }
         await transport.close()
+        await pauseBeforeReopen()
+        guard !Task.isCancelled else { return false }
         let ok = await transport.connect()
         record("reconnect \(ok ? "succeeded" : "failed")")
         mark(ok ? .ok : .missing, "reconnect")

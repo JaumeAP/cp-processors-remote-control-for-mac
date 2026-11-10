@@ -277,8 +277,16 @@ final class RemoteModel: ObservableObject {
         log?.write("app: \(text)")
     }
 
+    /// The CP650 takes one connection: after closing a link, give it this
+    /// long to drop the old session before the next one opens.
+    static let cp650ReopenPause = 2.0
+
     private func connectNow() async {
+        let hadLink = processor != nil
         await disconnectNow()
+        if hadLink, processorModel == .cp650 {
+            try? await Task.sleep(for: .seconds(Self.cp650ReopenPause))
+        }
         let address = trimmedHost
         guard !address.isEmpty else {
             message = "Set the processor IP in Setup"
@@ -286,6 +294,7 @@ final class RemoteModel: ObservableObject {
             return
         }
         let cp = DolbyCP(host: address, port: port, model: processorModel, autoReconnect: true)
+        if processorModel == .cp650 { await cp.setReopenPause(Self.cp650ReopenPause) }
         note("connect to \(address) as \(processorModel.rawValue)")
         if let log { await cp.setEventLog { line in log.write("link: \(line)") } }
         processor = cp
