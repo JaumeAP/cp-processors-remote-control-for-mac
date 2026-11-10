@@ -88,7 +88,7 @@ struct CP650Panel: View {
                 SetupDoor(f: f).placed(f, 272, 815, 628, 916)
 
                 // Level display, projector lamps and the main fader knob (centre).
-                LevelDisplay(value: model.fader, f: f)
+                LevelDisplay(model: model, f: f)
                     .placed(f, 683, 696, 768, 746)
                 KnobCradle(f: f).centred(f, 714, 822)
                 ProjectorLamps(f: f).centred(f, 722, 758)
@@ -249,24 +249,29 @@ private struct LCDView: View {
 }
 
 private struct LevelDisplay: View {
-    let value: Double
+    @ObservedObject var model: RemoteModel
     let f: Figure
 
     var body: some View {
         ZStack(alignment: .trailing) {
             RoundedRectangle(cornerRadius: f.length(3)).fill(Color(red: 0.07, green: 0, blue: 0))
             Group {
-                Text("88.8").foregroundStyle(Color(red: 0.15, green: 0.01, blue: 0.01))
-                Text(RemoteModel.faderText(value))
+                Text(model.levelInDecibels ? "-88.8" : "88.8")
+                    .foregroundStyle(Color(red: 0.15, green: 0.01, blue: 0.01))
+                Text(model.levelText)
                     .foregroundStyle(Color(red: 1, green: 0.12, blue: 0.08))
                     .shadow(color: .red, radius: f.length(3))
             }
-            .font(.system(size: f.length(25), weight: .bold, design: .monospaced))
+            .font(.system(size: f.length(model.levelInDecibels ? 20 : 25), weight: .bold, design: .monospaced))
             .padding(.trailing, f.length(6))
         }
+        .contentShape(Rectangle())
+        .onTapGesture { model.toggleLevelUnit() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fader level")
-        .accessibilityValue(RemoteModel.faderText(value))
+        .accessibilityValue(model.levelTextWithUnit)
+        .accessibilityHint("Switches between the fader number and decibels")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -495,7 +500,7 @@ struct FaderKnob: View {
         .onKeyPress(.leftArrow) { model.stepKnob(up: false); return .handled }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Main fader")
-        .accessibilityValue(RemoteModel.faderText(model.fader))
+        .accessibilityValue(model.levelTextWithUnit)
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: model.stepKnob(up: true)

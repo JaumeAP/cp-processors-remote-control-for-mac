@@ -663,6 +663,20 @@ private:
         }
         Value stored = coerce_and_clip(param, value);
         state_[param] = stored;  // stored before the reply is built, as in the reference
+        if (param == "sys.macro_preset") {
+            // Choosing a macro changes the macro name, as on the unit.
+            auto list = state_.find("sys.macros");
+            if (list != state_.end() && list->second.is_list) {
+                const std::string prefix = stored.wire() + ":";
+                for (const std::string& item : list->second.items) {
+                    if (item.compare(0, prefix.size(), prefix) != 0) continue;
+                    Value name;
+                    name.text = item.substr(prefix.size());
+                    state_["sys.macro_name"] = name;
+                    break;
+                }
+            }
+        }
         return value_line(param, stored, reply) ? Outcome::Reply : Outcome::Fatal;
     }
 

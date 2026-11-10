@@ -744,6 +744,39 @@ struct EveryControlTests {
         await model.disconnect()
     }
 
+    /// The CP850 / CP950 / CP950A screen shows the selected macro's name, read from the processor.
+    @Test(arguments: [ProcessorModel.cp850, .cp950, .cp950a])
+    func macroNameIsReadFromTheProcessor(_ processor: ProcessorModel) async throws {
+        let sim = try await Simulator(model: processor, extraArguments: ["--profile", "--seed", "sys.macro_name=Music"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.macroName == "Music" })
+        await model.disconnect()
+        #expect(model.macroName == nil)
+    }
+
+    /// The CP850 / CP950 / CP950A list their macros and select one by number.
+    @Test(arguments: [ProcessorModel.cp850, .cp950, .cp950a])
+    func macrosAreListedAndSelected(_ processor: ProcessorModel) async throws {
+        let sim = try await Simulator(model: processor, extraArguments: ["--profile"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.macros?.count == 7 && model.macroPreset == 1 })
+        #expect(model.macros?.first == RemoteModel.Macro(number: 3, name: "7.1 + Dolby Atmos"))
+        model.selectMacro(4)
+        #expect(await eventually { await probe(sim, "sys.macro_preset") == "4" })
+        #expect(await eventually { await probe(sim, "sys.macro_name") == "Music" })
+        model.stepMacro(by: 1)   // after 4 comes 11 in the unit's list
+        #expect(await eventually { await probe(sim, "sys.macro_preset") == "11" })
+        try await Task.sleep(for: .seconds(2.5))
+        #expect(model.macroPreset == 11)
+        #expect(model.macroName == "RCA")
+        await model.disconnect()
+        #expect(model.macros == nil)
+    }
+
     @Test func cp750EverySevenInputAndMute() async throws {
         let sim = try await Simulator(model: .cp750)
         defer { sim.stop() }
@@ -972,5 +1005,34 @@ struct SlowReplyTests {
         #expect(await sim.command("set latency 0") == "OK\n")
         #expect(await eventually(10) { await probe(sim, "mute") == "1" })
         await model.disconnect()
+    }
+}
+
+
+/// The level shown as the fader number or in decibels (7.0 is 0 dB).
+@MainActor
+@Suite struct LevelUnitTests {
+    @Test func theDolbyFaderScaleInDecibels() {
+        #expect(RemoteModel.decibels(forFader: 7.0) == 0)
+        #expect(RemoteModel.decibels(forFader: 4.0) == -10)
+        #expect(RemoteModel.decibels(forFader: 10.0) == 10)
+        #expect(RemoteModel.decibels(forFader: 0.0) == -90)
+        #expect(RemoteModel.levelText(7.0, decibels: true) == "0.0")
+        #expect(RemoteModel.levelText(8.0, decibels: true) == "+3.3")
+        #expect(RemoteModel.levelText(5.0, decibels: true) == "-6.7")
+        #expect(RemoteModel.levelText(2.0, decibels: true) == "-50.0")
+        #expect(RemoteModel.levelText(7.0, decibels: false) == "7.0")
+    }
+
+    @Test func theChoiceIsRemembered() {
+        let name = "CPRemoteTests.level.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        let first = RemoteModel(defaults: defaults, log: nil)
+        #expect(first.levelInDecibels == false)
+        first.toggleLevelUnit()
+        #expect(first.levelText == RemoteModel.levelText(first.fader, decibels: true))
+        let second = RemoteModel(defaults: defaults, log: nil)
+        #expect(second.levelInDecibels == true)
     }
 }

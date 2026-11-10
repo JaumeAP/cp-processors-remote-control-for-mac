@@ -1,5 +1,14 @@
 # CP Remote release notes
 
+## 1.0.10 (2026-11-10)
+- CP850, CP950 and CP950A: the macros of the processor are listed on the screen, the selected one in white; click one to select it. A new Macro menu does the same with Option-Command-1 to 9, and Next Macro / Previous Macro (Option-Command-Right / Left Arrow). The list and the selected macro are read from the unit.
+- The level can be shown in decibels instead of the fader number, on every model: 7.0 is 0 dB, from -90 dB at 0.0 to +10 dB at 10. Click the level display, or choose Level, Show Level in dB (Command-D). The choice is remembered.
+- Everything in 1.0.9 is included.
+
+## 1.0.9 (2026-11-10)
+- CP850, CP950 and CP950A: the screen now shows the name of the selected macro, read from the processor (`sys.macro_name`), under the fader level. If the unit does not answer it, the screen stays as before.
+- Everything in 1.0.8 is included.
+
 ## 1.0.8 (2026-11-10)
 - New Level menu: Level Up (Command-Up Arrow) and Level Down (Command-Down Arrow) move the fader by 0.1, and Reference 7.0 (Command-0) puts it on the Dolby reference level. They work on every model and are available to VoiceOver from the menu bar.
 - Everything in 1.0.7 is included.

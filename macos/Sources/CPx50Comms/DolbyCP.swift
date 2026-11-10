@@ -241,6 +241,46 @@ public actor DolbyCP {
         return nil
     }
 
+    /// Query a parameter whose reply is several lines: the header line that
+    /// names it, then one line per item (the CP850 / CP950 `sys.macros`).
+    /// The items are the lines that follow the header, each waited for up to
+    /// `itemTimeout`, at most `limit` of them. Nil when the header does not
+    /// come, or names something else.
+    public func getList(_ param: String, timeout: Double = ProtocolTiming.queryTimeout,
+                        itemTimeout: Double = 0.3, limit: Int = 64) async throws(ProtocolError) -> [String]? {
+        if !(await linkUp()), autoReconnect { _ = await reconnectTransport() }
+        if !(await linkUp()) {
+            mark(.missing, "get: link is down")
+            return nil
+        }
+        let line = try WireProtocol.formatQuery(model: model, param: param)
+        await acquire()
+        defer { release() }
+        do {
+            try await transport.sendLine(line)
+            record("send \(line)")
+        } catch {
+            record("send failed: \(line) (\(error))")
+            mark(.missing, "send failed")
+            return nil
+        }
+        try? await Task.sleep(for: .seconds(gap))
+        guard let header = await readLogged(timeout: timeout) else {
+            mark(.missing, "no reply to \(line) within \(timeout) s")
+            return nil
+        }
+        let name = header.split(whereSeparator: { $0 == " " || $0 == "\t" }).first.map(String.init) ?? header
+        guard sameScalars(name, param) else { return nil }
+        mark(.ok)
+        lastActivity = .now
+        var items: [String] = []
+        while items.count < limit, let item = await readLogged(timeout: itemTimeout) {
+            let text = item.trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty { items.append(text) }
+        }
+        return items
+    }
+
     /// Wait until the queue is empty and nothing is in flight; true if that
     /// happened within `timeout`.
     public func settle(timeout: Double = 5) async -> Bool {
