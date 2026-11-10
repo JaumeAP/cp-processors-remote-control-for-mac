@@ -1,6 +1,5 @@
-/// A newline-framed link to a processor: the interface `DolbyCP` drives, as
-/// `connect`, `send_line`, `read_line` and `close` (`TCPTransport`,
-/// `SerialTransport`). One reader and one writer at a time.
+/// A newline-framed link to a processor: the interface `DolbyCP` drives
+/// (`TCPTransport`, `SerialTransport`). One reader and one writer at a time.
 public protocol LineTransport: Sendable {
     /// True while the link is open (it may still have been closed by the peer).
     func isConnected() async -> Bool

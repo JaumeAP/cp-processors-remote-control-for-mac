@@ -1,5 +1,4 @@
-/// FAULT, which nothing ever sets; the maintainer confirmed only these three
-/// are needed.
+/// The processor's health, as the client sees it.
 public enum ProcessorStatus: Sendable, Equatable {
     /// Never connected yet.
     case initializing
@@ -10,10 +9,12 @@ public enum ProcessorStatus: Sendable, Equatable {
     case missing
 }
 
-/// The processor's status and the last known value of each parameter
-/// record: the client drives every change.
+/// The processor's status and the last known value of each parameter. The
+/// client drives every change.
 ///
-/// key is set again, and a value may change type. Params are keyed by Unicode
+/// Values keep their first insertion order, also when a key is set again,
+/// and a value may change type. Params are keyed by Unicode scalars, so
+/// "KEY" and "\u{212A}EY" (with a Kelvin sign) are two params.
 public struct ProcessorState: Sendable {
     public private(set) var status: ProcessorStatus = .initializing
     private var entries: [(param: String, value: WireValue)] = []

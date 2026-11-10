@@ -1,9 +1,11 @@
+/// A value to SET.
 public enum WireValue: Sendable, Equatable {
     case bool(Bool)
     case int(Int)
     case string(String)
 
-    /// scalars (not canonical equivalence), doubles by bit pattern.
+    /// Exact identity: strings compare by Unicode scalars, not by canonical
+    /// equivalence.
     func isIdentical(to other: WireValue) -> Bool {
         switch (self, other) {
         case let (.bool(a), .bool(b)): a == b
@@ -14,7 +16,7 @@ public enum WireValue: Sendable, Equatable {
     }
 }
 
-/// `70` is `.int`, `true` is `.bool`, `"x"` is `.string`.
+/// Literals: `70` is `.int`, `true` is `.bool`, `"x"` is `.string`.
 extension WireValue: ExpressibleByIntegerLiteral, ExpressibleByBooleanLiteral, ExpressibleByStringLiteral
 {
     public init(integerLiteral value: Int) { self = .int(value) }
@@ -42,10 +44,13 @@ public enum ProtocolError: Error, Equatable {
     }
 }
 
-/// Per-model formatting and parsing of wire lines, the Swift port of
+/// Per-model formatting and parsing of wire lines. Stateless.
 ///
-///    form is this project's convention, confirmed by the maintainer.
+/// 1. SET: `param=value` (CP650) or `param value` (the others).
+/// 2. Query: `param?` (CP650) or `param ?` (the others).
+/// 3. Replies are split into lines and `(param, value)` pairs.
 /// 4. Only CR, LF and non-ASCII are refused; spaces, `=`, `?` and other
+///    control bytes pass.
 public enum WireProtocol {
     /// The SET line, without the trailing newline. The param is checked
     /// before the value, and within each, CR/LF before non-ASCII.
@@ -91,8 +96,8 @@ public enum WireProtocol {
         }
     }
 
-    /// `lua/tests/vectors/format_value.tsv`): booleans as `1`/`0`, an
-    /// integral double as its exact integer (any size, `-0.0` as `0`), any
+    /// The wire text of a value: booleans as `1`/`0`, integers in decimal,
+    /// strings as they are.
     public static func wireText(_ value: WireValue) -> String {
         switch value {
         case .bool(let b): return b ? "1" : "0"
@@ -116,7 +121,7 @@ public enum WireProtocol {
 
     private typealias Scalars = ArraySlice<Unicode.Scalar>
 
-    /// `str.splitlines()`: breaks on LF, CR, CRLF, VT, FF, FS, GS, RS, NEL,
+    /// Splits text into lines: breaks on LF, CR, CRLF, VT, FF, FS, GS, RS, NEL,
     /// LINE SEPARATOR and PARAGRAPH SEPARATOR; no trailing empty line.
     private static func splitLines(_ s: [Unicode.Scalar]) -> [[Unicode.Scalar]] {
         var lines: [[Unicode.Scalar]] = []
@@ -144,7 +149,9 @@ public enum WireProtocol {
         }
     }
 
-    /// `Character.isWhitespace` (it includes U+001C...U+001F).
+    /// The whitespace that is stripped and that separates param and value. Not
+    /// the same set as Swift's `Character.isWhitespace` (it includes
+    /// U+001C...U+001F).
     private static func isWhitespaceScalar(_ c: Unicode.Scalar) -> Bool {
         switch c.value {
         case 0x09...0x0D, 0x1C...0x20, 0x85, 0xA0, 0x1680, 0x2000...0x200A,
@@ -159,7 +166,7 @@ public enum WireProtocol {
         string(strip(Array(s.unicodeScalars)[...]))
     }
 
-    /// `str.strip()`. Keeps the slice's indices.
+    /// Strips leading and trailing whitespace. Keeps the slice's indices.
     private static func strip(_ s: Scalars) -> Scalars {
         var lo = s.startIndex
         var hi = s.endIndex

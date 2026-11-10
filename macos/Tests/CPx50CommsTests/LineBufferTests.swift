@@ -1,8 +1,10 @@
 import Testing
 @testable import CPx50Comms
 
-/// are regressions: CRLF is one Character, which a Character-based check (the
-/// former CP650Protocol) let through as a second command.
+/// Text with CR, LF or a non-ASCII character is refused before anything is
+/// sent. CRLF is one Swift Character, so a check made on Characters instead of
+/// Unicode scalars would let it through as a second command: these cases guard
+/// against that.
 @Suite struct FramingRegressionTests {
     @Test(arguments: ["a\nb", "a\rb", "a\r\nb", "0\r\nMASTER=0", "fadér"])
     func refusesUnframeableText(_ bad: String) {

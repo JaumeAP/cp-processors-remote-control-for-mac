@@ -13,12 +13,14 @@ public struct PendingSet: Sendable {
 
 extension PendingSet: Equatable {
     /// Exact equality: the param and string values compare by Unicode
+    /// scalars, not by canonical equivalence.
     public static func == (a: PendingSet, b: PendingSet) -> Bool {
         sameScalars(a.param, b.param) && a.value.isIdentical(to: b.value) && a.timeout == b.timeout
     }
 }
 
-/// maintainer decided: the client never queues a GET).
+/// The bounded queue of SETs waiting to go on the wire (SETs only: the client
+/// never queues a GET).
 ///
 /// 1. A SET for a param already queued replaces that entry in place, value
 ///    and timeout, keeping its FIFO position.
@@ -29,8 +31,8 @@ extension PendingSet: Equatable {
 /// 4. `inflight` records the one command being sent; queue operations never
 ///    touch it.
 ///
-/// Kelvin sign in "\u{212A}EY" is not "KEY", and NFC and NFD "café" are two
-/// params.
+/// Params match by Unicode scalars, not by canonical equivalence: the Kelvin
+/// sign in "\u{212A}EY" is not "KEY", and NFC and NFD "café" are two params.
 public struct CommandQueue: Sendable {
     public static let defaultMaxSize = 10
 

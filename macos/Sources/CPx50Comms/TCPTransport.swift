@@ -1,16 +1,16 @@
 import Foundation
 import Network
 
-/// A TCP link to a processor over Network.framework (the Swift port of
+/// A TCP link to a processor over Network.framework.
 ///
 /// 1. `connect()` opens a new connection within `connectTimeout`; only once it
 ///    is ready does it replace the current one (which is then closed). A
 ///    failed attempt leaves the current link as it was.
 /// 2. `isConnected()` is true from a successful connect until `close()` or a
 ///    connection error (a reset): the peer closing its side does not change
-///    it, as an asyncio writer stays open after the peer's FIN.
+///    it: a writer stays open after the peer's FIN.
 /// 3. `peerClosed()` is true once the peer closed and every received byte has
-///    been read (asyncio's `at_eof()`).
+///    been read.
 /// 4. `sendLine` writes "<line>\n" with no validation of the content, and
 ///    fails with `notConnected` without an open link, `notASCII` (nothing
 ///    sent, link kept) for a non-ASCII line, `writeTimedOut` when the peer has
@@ -32,7 +32,7 @@ public actor TCPTransport: LineTransport {
 
     /// The established link; nil before connect and after close.
     private var connection: NWConnection?
-    /// A connection error (reset) ended the link: the asyncio writer is closing.
+    /// A connection error (reset) ended the link: it is closing.
     private var failed = false
     private var buffer = LineBuffer()
     private var dataWaiter: ResumeOnce<Bool>?
@@ -179,10 +179,9 @@ public actor TCPTransport: LineTransport {
 
     private func linkStateChanged(_ conn: NWConnection, _ newState: NWConnection.State) {
         guard conn === connection else { return }
-        // After the peer's FIN asyncio stops reading the socket, so a reset
-        // that follows (the peer answering a send with RST) goes unnoticed and
-        // the link stays connected until a send fails. Do the same: past end
-        // of stream only `sendLine` takes the link down.
+        // After the peer's FIN, a reset that follows (the peer answering a
+        // send with RST) is not treated as a connection error: past end of
+        // stream only `sendLine` takes the link down.
         if case .failed = newState, !buffer.atEOF {
             failed = true
             wakeReader()
@@ -199,7 +198,7 @@ public actor TCPTransport: LineTransport {
         guard conn === connection else { return }
         if let data, !data.isEmpty { buffer.append(data) }
         if let error, !Self.isEndOfStream(error) {
-            failed = true            // a reset: asyncio's connection_lost(exc)
+            failed = true            // a reset: the connection is lost
         } else if isComplete || error != nil {
             buffer.markEOF()         // the peer's FIN: feed_eof
         } else {

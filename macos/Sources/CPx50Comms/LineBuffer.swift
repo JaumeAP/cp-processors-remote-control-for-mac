@@ -1,15 +1,17 @@
-/// client reads it: asyncio's `StreamReader.readline()` with its 64 KiB
+/// The incoming byte stream of a link, read line by line, with a 64 KiB line
+/// limit.
 ///
 /// 1. Lines are cut when they are read, not when bytes arrive.
 /// 2. A newline found beyond the limit: everything through it is discarded
+///    and the read yields nothing.
 /// 3. More than the limit buffered with no newline: the buffer is discarded
 ///    and the read yields nothing; the rest of that line, up to and including
-///    rest as a line; the maintainer chose to drop it, so a fragment of a cut
-///    line never becomes a reply (accepted difference, 2026-11-09).
+///    its newline, is discarded too when it arrives, so a fragment of a cut
+///    line never becomes a reply.
 /// 4. At end of stream, an unterminated tail is consumed and yields nothing
 ///    (the cut point is unknown: `fader_level=5` could be `fader_level=50`).
 /// 5. A line is decoded as ASCII with U+FFFD for any byte above 0x7F, and
-///    every trailing CR and LF is stripped (`rstrip("\r\n")`).
+///    every trailing CR and LF is stripped.
 struct LineBuffer {
     static let defaultLimit = 64 * 1024
 
@@ -39,7 +41,7 @@ struct LineBuffer {
         atEOF = true
     }
 
-    /// One `readline()` attempt over what is buffered.
+    /// One read attempt over what is buffered.
     mutating func read() -> Read {
         if discardingRest {
             guard let newline = bytes.firstIndex(of: 0x0A) else {

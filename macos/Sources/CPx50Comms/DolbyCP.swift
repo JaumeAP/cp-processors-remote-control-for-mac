@@ -1,13 +1,19 @@
-/// The control client for one Dolby CP650–CP950A processor (the Swift port
+/// The control client for one Dolby CP650–CP950A processor, over any
+/// `LineTransport`.
 ///
-///    a background task sends the queue one command at a time, dequeuing only
-///    once it holds the link, requeueing a SET whose send never reached the
-/// 2. `get` is the one blocking call: it waits its turn, retries a lost
-///    the status: a parsed reply or `ACK` → ok, no line at all → missing, a
+/// 1. `set` queues the SET and returns at once; a background task sends the
+///    queue one command at a time, dequeuing only once it holds the link, and
+///    requeues a SET whose send never reached the wire.
+/// 2. `get` is the one blocking call: it waits its turn, retries a lost or
+///    timed-out query, and skips stale lines that do not name the param.
+/// 3. Every exchange updates the status: a parsed reply or `ACK` → ok, no
+///    line at all → missing; a line that does not parse leaves it as it is.
 /// 4. A SET counts as applied when its reply does not parse at all, or names
+///    the param.
 ///
-/// returns false, `get` returns nil and the status says why. Only a command
-/// that cannot be framed throws (`ProtocolError`).
+/// Connection problems are never thrown: `connect` returns false, `get`
+/// returns nil, and the status says why. Only a command that cannot be
+/// framed throws (`ProtocolError`).
 public actor DolbyCP {
     static let resyncMax = 32
 
@@ -102,7 +108,8 @@ public actor DolbyCP {
 
     public var status: ProcessorStatus { state.status }
 
-    /// insertion order; a SET records the value it sent, a query the text it got.
+    /// Every last-known `(param, value)`, in first insertion order; a SET
+    /// records the value it sent, a query the text it got.
     public var stateDict: [(param: String, value: WireValue)] { state.values }
 
     /// SETs queued and not yet sent.
@@ -230,7 +237,7 @@ public actor DolbyCP {
         return queue.isEmpty && !queue.hasInflight && !busy
     }
 
-    /// `cp._queue.enqueue(...)`), for tests of the drop path.
+    /// Queue a SET without the framing check, for tests of the drop path.
     func enqueueUnchecked(_ command: PendingSet) {
         queue.enqueue(command)
     }
@@ -257,8 +264,8 @@ public actor DolbyCP {
         }
     }
 
-    /// `_stop_background` gathers them). Swift cancellation is cooperative,
-    /// so each task checks it after every wait.
+    /// Cancel the drain and watchdog tasks and wait for both to end. Swift
+    /// cancellation is cooperative, so each task checks it after every wait.
     private func stopBackground() async {
         let tasks = [drainTask, watchdogTask].compactMap { $0 }
         drainTask = nil
@@ -410,7 +417,8 @@ public actor DolbyCP {
         return (response, true)
     }
 
-    /// anything else that does not parse) → applied; else it must name the param.
+    /// No reply → not applied; a reply with no pair (an `ACK`, or anything
+    /// else that does not parse) → applied; else it must name the param.
     private func confirmsSet(_ response: String?, _ param: String) -> Bool {
         guard let response else { return false }
         let pairs = WireProtocol.parseResponse(model: model, text: response)
@@ -423,7 +431,7 @@ public actor DolbyCP {
         if changed { statusContinuation.yield(newStatus) }
     }
 
-    // MARK: - One command in flight (FIFO, as asyncio.Lock)
+    // MARK: - One command in flight (FIFO)
 
     private func acquire() async {
         if !busy {

@@ -1,11 +1,12 @@
 import Darwin
 import Foundation
 
-/// A serial (RS-232 / USB-serial) link to a processor (the Swift port of
+/// A serial (RS-232 / USB-serial) link to a processor.
 ///
 /// 1. `connect()` opens the device `O_RDWR | O_NOCTTY | O_NONBLOCK` (so a
 ///    port with its modem lines down cannot block the open), puts it in raw
 ///    mode and sets the baud rate (`configureRawSerial`); false if the open
+///    fails.
 /// 2. `isConnected()`, `peerClosed()`, `sendLine` and `readLine` behave as
 ///    `TCPTransport`'s: lines per `LineBuffer`; the other end closing (a pty
 ///    master closed, a cable pulled) is end of stream; the next failed write
@@ -28,7 +29,7 @@ public actor SerialTransport: LineTransport {
 
     /// The current link; nil before connect and after close.
     private var link: SerialLink?
-    /// The asyncio writer is open and not closing.
+    /// The link is open and not closing.
     private var writerOpen = false
     private var buffer = LineBuffer()
     private var dataWaiter: ResumeOnce<Bool>?
@@ -269,16 +270,17 @@ private func writeAll(_ fd: Int32, _ bytes: [UInt8], timeout: Double) -> SerialL
     return .written
 }
 
-/// `configure_raw` applies only these and ignores any other value silently.
-let pythonTermiosBauds: Set<Int> = [0, 50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400,
+/// The baud rates the raw-mode setup sets; any other value leaves the speed
+/// unchanged.
+let supportedBauds: Set<Int> = [0, 50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400,
                                     4800, 9600, 19200, 38400, 57600, 115200, 230400]
 
-/// a tty; errors are ignored.
+/// Put a tty fd into raw mode and, if `baudrate` is one of `supportedBauds`,
+/// set the speed. A no-op if `fd` is not a tty; errors are ignored.
 ///
-/// them with `TCSAFLUSH`, which waits for pending output to drain and can
-/// block forever when the other end does not read; the port applies them at
-/// once (`TCSANOW`) and then discards pending input, the same outcome without
-/// the hang (accepted difference, maintainer's decision 2026-11-09).
+/// The settings apply at once (`TCSANOW`) and pending input is then
+/// discarded. `TCSAFLUSH` would wait for pending output to drain, which can
+/// block forever when the other end does not read.
 func configureRawSerial(_ fd: Int32, baudrate: Int?) {
     var mode = termios()
     guard tcgetattr(fd, &mode) == 0 else { return }
@@ -299,7 +301,7 @@ func configureRawSerial(_ fd: Int32, baudrate: Int?) {
     }
     guard tcsetattr(fd, TCSANOW, &mode) == 0 else { return }
     _ = tcflush(fd, TCIFLUSH)
-    guard let baudrate, pythonTermiosBauds.contains(baudrate) else { return }
+    guard let baudrate, supportedBauds.contains(baudrate) else { return }
     var speed = termios()
     guard tcgetattr(fd, &speed) == 0 else { return }
     _ = cfsetispeed(&speed, speed_t(baudrate))

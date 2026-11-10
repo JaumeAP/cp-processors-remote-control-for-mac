@@ -93,6 +93,14 @@ const std::pair<double, double>* range_of(const std::string& param) {
 bool py_space(unsigned char c) {
     return c == ' ' || (c >= '\t' && c <= '\r') || (c >= 0x1c && c <= 0x1f);
 }
+bool py_space(char c) { return py_space(static_cast<unsigned char>(c)); }
+
+// A string's bytes as unsigned char, for range-for loops.
+struct Bytes {
+    const std::string& s;
+    const unsigned char* begin() const { return reinterpret_cast<const unsigned char*>(s.data()); }
+    const unsigned char* end() const { return begin() + s.size(); }
+};
 
 std::string py_strip(const std::string& s) {
     size_t a = 0, b = s.size();
@@ -105,7 +113,7 @@ std::string py_strip(const std::string& s) {
 std::string ascii_replace(const std::string& raw) {
     std::string out;
     out.reserve(raw.size());
-    for (unsigned char c : raw) {
+    for (unsigned char c : Bytes{raw}) {
         if (c < 0x80) out.push_back(char(c));
         else out += "\xEF\xBF\xBD";
     }
@@ -454,7 +462,7 @@ private:
     static std::string hex(const std::string& s) {
         static const char* digits = "0123456789abcdef";
         std::string out;
-        for (unsigned char c : s) {
+        for (unsigned char c : Bytes{s}) {
             out.push_back(digits[c >> 4]);
             out.push_back(digits[c & 15]);
         }
@@ -591,17 +599,17 @@ private:
         if (v.is_list) {                       // header line, then one line per item
             std::string text = param;
             for (const std::string& item : v.items) text += "\n" + item;
-            for (unsigned char c : param)
+            for (unsigned char c : Bytes{param})
                 if (c == '\n' || c == '\r' || c >= 0x80) return false;
             for (const std::string& item : v.items)
-                for (unsigned char c : item)
+                for (unsigned char c : Bytes{item})
                     if (c == '\n' || c == '\r' || c >= 0x80) return false;
             out = text;
             return true;
         }
         const std::string val = v.wire();
         for (const std::string* s : {&param, &val})
-            for (unsigned char c : *s)
+            for (unsigned char c : Bytes{*s})
                 if (c == '\n' || c == '\r' || c >= 0x80) return false;
         out = key_value_ ? param + "=" + val : param + " " + val;
         return true;
