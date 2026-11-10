@@ -161,6 +161,26 @@ struct DolbyCPLinkTests {
         await cp.disconnect()
     }
 
+    /// The CP650 takes one connection: a second one is ignored while the first
+    /// is open and for the linger afterwards; the reopen pause outlasts it.
+    @Test func strictSimulatorTakesOneConnectionAndThePauseOutlastsTheLinger() async throws {
+        let sim = try await Simulator(extraArguments: ["--strict-cp650", "--linger", "1"])
+        defer { sim.stop() }
+        let first = fastClient(sim.port, getRetries: 0)
+        #expect(await first.connect())
+        #expect(try await first.get("mute", timeout: 0.5) == "0")
+        let second = fastClient(sim.port, getRetries: 0)
+        #expect(await second.connect())
+        #expect(try await second.get("mute", timeout: 0.5) == nil, "a second session must be ignored")
+        await first.disconnect()
+        #expect(await second.reconnect())
+        #expect(try await second.get("mute", timeout: 0.5) == nil, "still inside the linger")
+        await second.setReopenPause(1.3)
+        #expect(await second.reconnect())
+        #expect(try await second.get("mute", timeout: 0.5) == "0", "after the pause the session works")
+        await second.disconnect()
+    }
+
     @Test func unknownParamTimesOutAndTheLinkStillWorks() async throws {
         let sim = try await Simulator()
         defer { sim.stop() }
