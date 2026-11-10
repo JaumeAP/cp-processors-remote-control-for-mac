@@ -38,6 +38,7 @@ struct EventLogTests {
         let cp = fastClient(sim.port)
         await cp.setEventLog { events.add($0) }
         #expect(await cp.connect())
+        #expect(!events.lines.isEmpty, "the log must have recorded the connect")
         await cp.setEventLog(nil)
         let before = events.lines.count
         _ = try await cp.get("fader_level", timeout: 0.5)

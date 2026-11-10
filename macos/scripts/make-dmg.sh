@@ -41,11 +41,15 @@ cat > "$app/Contents/Info.plist" <<EOF
     <key>CFBundleExecutable</key><string>$APP_NAME</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Jaume Puig. All rights reserved.</string>
+    <key>NSLocalNetworkUsageDescription</key><string>CP Remote connects to Dolby cinema processors on your local network to read their state and send their controls.</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>
 </plist>
 EOF
+swift "$here/scripts/make-icon.swift" "$app/Contents/Resources/AppIcon.icns"
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 

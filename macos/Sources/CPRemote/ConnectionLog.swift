@@ -1,8 +1,9 @@
 // A plain-text log of what the app and its link to the processor do, for
 // finding why a connection was lost. One line per event, with the time to the
 // millisecond. It records the lines exchanged with the processor, the status
-// changes with their reason, and the window and focus changes of the app. It
-// never records anything else about the Mac or the user.
+// changes with their reason, and the window and focus changes of the app, and
+// at start the app version and the macOS version. It records nothing else
+// about the Mac or the user.
 
 import Foundation
 

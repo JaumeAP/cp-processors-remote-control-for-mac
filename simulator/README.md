@@ -5,11 +5,13 @@ C++ standard library and POSIX sockets. Builds on Linux and macOS.
 
 ## Build
 
-    cmake -S cpp -B cpp/build && cmake --build cpp/build
+    cmake -S simulator -B simulator/build && cmake --build simulator/build
 
 or, without CMake:
 
-    c++ -std=c++17 -O2 -pthread cpp/processor_sim.cpp -o processor_sim
+    c++ -std=c++17 -O2 -pthread simulator/processor_sim.cpp -o processor_sim
+
+(both from the repository root)
 
 ## Run
 
@@ -17,8 +19,7 @@ or, without CMake:
 
 Options: `--model`, `--host`, `--port` (0 picks a free port; default is the
 model's documented port), `--latency SECONDS`, `--drop-after N`, `--no-clip`,
-`--silent`, `--partial-response`. Same semantics as the `ProcessorSim`
-constructor arguments of the same names. Ctrl-C stops it.
+`--silent`, `--partial-response`. Ctrl-C stops it.
 
 Every wait is bounded: `--write-timeout SECONDS` (default 2) gives up a send
 to a client that stopped reading and drops it; `--idle-timeout SECONDS`
@@ -61,6 +62,6 @@ Its in-process hooks are exposed on the command line:
 There is no CI job for the simulator. The macOS build is always done locally,
 on the Mac, never in a macOS CI job: build it with the commands above, then run
 the Swift tests in `macos/` (`swift test`, see `macos/README.md`). They launch
-the simulator themselves, from `$CPSIM_BIN` or else `cpp/build/processor_sim`,
-so poll(), sockets and ptys are checked on a Mac. Linux is built with the same
+the simulator themselves, from the binary `$CPSIM_BIN` names (there is no
+default path), so poll(), sockets and ptys are checked on a Mac. Linux is built with the same
 commands; the Swift tests that exercise it run on the Mac.

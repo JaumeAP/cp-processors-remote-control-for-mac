@@ -8,10 +8,11 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "CPRemote", targets: ["CPRemote"]),
+        .library(name: "CPx50Comms", targets: ["CPx50Comms"]),
     ],
     targets: [
-        // Live control of the Dolby cinema processors (the Swift port of
-        // library), kept out of the app target so the tests can import it.
+        // The control library for the Dolby cinema processors, kept out of the
+        // app target so the tests and other packages can import it.
         .target(name: "CPx50Comms"),
         .executableTarget(
             name: "CPRemote",

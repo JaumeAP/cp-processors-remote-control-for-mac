@@ -393,7 +393,10 @@ final class RemoteModel: ObservableObject {
 
     private func pollCycle(_ cp: DolbyCP) async {
         guard isCurrent(cp) else { return }
-        if !(await cp.isLinkUp) {
+        let linkIsUp = await cp.isLinkUp
+        // The app may have disconnected while the client was asked.
+        guard isCurrent(cp) else { return }
+        if !linkIsUp {
             // The client's own watchdog runs only after a successful
             // connect: retry here, so a processor that was off, booting or
             // unreachable at connect time is found when it comes up.

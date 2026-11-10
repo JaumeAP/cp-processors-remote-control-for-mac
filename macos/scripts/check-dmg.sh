@@ -10,7 +10,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 failures=0
 check() { if "$@"; then echo "ok: $*"; else echo "FAILED: $*"; failures=$((failures + 1)); fi; }
 
-check hdiutil verify "$dmg" >/dev/null
+check bash -c 'hdiutil verify "$1" >/dev/null' _ "$dmg"
 
 mount="$(mktemp -d)"
 hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg" >/dev/null
@@ -23,6 +23,8 @@ check test "$(defaults read "$plist" CFBundleShortVersionString)" = "$version"
 check test "$(defaults read "$plist" CFBundleIdentifier)" = "com.jaumeap.cpremote"
 check test "$(defaults read "$plist" CFBundleDisplayName)" = "CP Remote"
 check test -x "$app/Contents/MacOS/CPRemote"
+check test -s "$app/Contents/Resources/AppIcon.icns"
+check test -n "$(defaults read "$plist" NSLocalNetworkUsageDescription)"
 check codesign --verify --strict "$app"
 check test -L "$mount/Applications"
 check test -s "$mount/Release Notes.pdf"
