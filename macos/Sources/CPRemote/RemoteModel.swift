@@ -204,8 +204,14 @@ final class RemoteModel: ObservableObject {
         setFader(next)
     }
 
-    /// One 0.1 step of the knob (arrow keys, VoiceOver).
+    /// One 0.1 step of the knob (arrow keys, VoiceOver, the Level menu).
     func stepKnob(up: Bool) { turnKnob(byDegrees: (up ? 0.1 : -0.1) * Self.degreesPerUnit) }
+
+    /// The Dolby reference level, fader 7.0.
+    static let referenceLevel = 7.0
+
+    /// Put the fader on the reference level (the Level menu).
+    func setReference() { setFader(Self.referenceLevel) }
 
     /// A front-panel button: the CP650's format buttons (`format_button`), or
     /// the CP750's input buttons (`cp750.sys.input_mode`).

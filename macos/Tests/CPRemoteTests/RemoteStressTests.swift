@@ -727,6 +727,23 @@ struct EveryControlTests {
         }
     }
 
+    /// The Level menu: one step up or down, and the reference level 7.0.
+    @Test func levelStepsAndReference() async throws {
+        let sim = try await Simulator(model: .cp650, extraArguments: ["--seed", "fader_level=45"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.fader == 4.5 })
+        model.setReference()
+        #expect(await settles(model, sim, on: "70"))
+        model.stepKnob(up: true)
+        #expect(await settles(model, sim, on: "71"))
+        model.stepKnob(up: false)
+        model.stepKnob(up: false)
+        #expect(await settles(model, sim, on: "69"))
+        await model.disconnect()
+    }
+
     @Test func cp750EverySevenInputAndMute() async throws {
         let sim = try await Simulator(model: .cp750)
         defer { sim.stop() }

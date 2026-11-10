@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.0.8 (2026-11-10)
+- New Level menu: Level Up (Command-Up Arrow) and Level Down (Command-Down Arrow) move the fader by 0.1, and Reference 7.0 (Command-0) puts it on the Dolby reference level. They work on every model and are available to VoiceOver from the menu bar.
+- Everything in 1.0.7 is included.
+
 ## 1.0.7 (2026-11-10)
 - CP650: after a link is closed, the app waits two seconds before opening the next one (on Reconnect, on Save and Connect, and when it reopens a hung link), so the unit can drop the old session first. The CP650 takes a single connection; the Q-SYS plugin does the same. Not yet tested on a real CP650.
 - Everything in 1.0.6 is included.
