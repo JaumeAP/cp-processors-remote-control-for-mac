@@ -34,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <list>
 #include <map>
 #include <memory>
@@ -293,6 +294,8 @@ struct Options {
     std::vector<std::pair<std::string, std::string>> seeds;
     std::vector<std::pair<std::string, std::vector<std::string>>> seed_lists;
     bool profile = false;  // seed what the control plugin polls
+    bool strict_cp650 = false;  // CP650 as Dolby's manual describes it (see Sim::respond_strict)
+    double linger = 0.0;        // strict mode: seconds a closed session still blocks the next one
     std::vector<std::string> serial;
     std::vector<int> fds;  // inherited descriptors to serve, like serve_fd()
 };
@@ -308,7 +311,8 @@ public:
           drop_after_(opt_.drop_after),
           clip_(opt_.clip),
           silent_(opt_.silent),
-          partial_(opt_.partial_response) {
+          partial_(opt_.partial_response),
+          strict_(opt_.strict_cp650 && opt_.model == "CP650") {
         if (opt_.profile) {
             const Profile p = plugin_profile(opt_.model);
             for (const auto& kv : p.values) {
@@ -324,6 +328,18 @@ public:
             state_[kv.first] = v;
         }
         for (const auto& kv : opt_.seed_lists) set_list(kv.first, kv.second);
+        if (strict_) {
+            // Every key the manual lists answers a query, seeded or not.
+            const std::pair<const char*, const char*> defaults[] = {
+                {"fader_level", "70"}, {"fader_setting", "local"}, {"format_button", "0"},
+                {"mute", "0"}, {"format_list", "01, 04, 05, 10, 93, 94, 95, 99"}};
+            for (const auto& kv : defaults) {
+                if (state_.count(kv.first)) continue;
+                Value v;
+                v.text = kv.second;
+                state_[kv.first] = v;
+            }
+        }
     }
 
     // Serve one connection until it ends. Mirrors ProcessorSim._serve.
@@ -333,6 +349,18 @@ public:
         long count = 0;
         char chunk[CHUNK];
         bool eof = false;
+        // Strict mode: the CP650 takes one connection. A second one is read
+        // and ignored (no echo, no reply) while the first is open, and for
+        // `linger` seconds after it closed.
+        bool blocked = false;
+        struct Leave {
+            std::function<void()> f;
+            ~Leave() { if (f) f(); }
+        } leave;
+        if (strict_ && tcp) {
+            if (enter_session()) leave.f = [this] { leave_session(); };
+            else blocked = true;
+        }
         while (!eof) {
             std::string raw;
             if (!read_line(fd, buf, chunk, raw, eof, tcp ? opt_.idle_timeout : 0.0)) break;
@@ -343,6 +371,7 @@ public:
                 if (record_) received_.push_back(line);
             }
             trace("recv", line);
+            if (blocked) continue;
 
             if (latency_ > 0.0 && !sleep_interruptibly(latency_)) break;
 
@@ -456,6 +485,10 @@ private:
     std::atomic<bool> silent_;
     std::atomic<bool> partial_;
     std::atomic<bool> record_{false};
+    const bool strict_;
+    std::mutex session_mu_;
+    int active_ = 0;
+    std::chrono::steady_clock::time_point last_close_{};
     const std::chrono::steady_clock::time_point started_ = std::chrono::steady_clock::now();
     std::vector<std::string> received_;  // guarded by log_mu()
 
@@ -622,6 +655,7 @@ private:
         const std::string& value = parsed->second;
 
         std::lock_guard<std::mutex> lock(mu_);
+        if (strict_) return respond_strict(param, value, reply);
         if (value == "?") {
             auto it = state_.find(param);
             if (it == state_.end()) return Outcome::None;  // unknown param -> silence
@@ -630,6 +664,55 @@ private:
         Value stored = coerce_and_clip(param, value);
         state_[param] = stored;  // stored before the reply is built, as in the reference
         return value_line(param, stored, reply) ? Outcome::Reply : Outcome::Fatal;
+    }
+
+    // --strict-cp650: the CP650 as Dolby's manual describes it. An unknown key
+    // answers `error`. fader_level takes 0 to 100, format_button 0 to 7 and
+    // mute 0, 1 or 2 (toggle); anything else answers `error` and is not
+    // stored. ASSUMPTION: the manual does not say what an out-of-range SET
+    // does; `error` is used so a wrong number is seen, not silently clipped.
+    Outcome respond_strict(const std::string& param, const std::string& value, std::string& reply) {
+        auto it = state_.find(param);
+        if (it == state_.end()) { reply = "error"; return Outcome::Reply; }
+        if (value == "?")
+            return value_line(param, it->second, reply) ? Outcome::Reply : Outcome::Fatal;
+        if (param == "fader_level" || param == "format_button" || param == "mute") {
+            const double hi = param == "fader_level" ? 100 : param == "format_button" ? 7 : 2;
+            double num = 0;
+            if (!py_float(value, num) || num != std::floor(num) || num < 0 || num > hi) {
+                reply = "error";
+                return Outcome::Reply;
+            }
+            if (param == "mute" && num == 2) {
+                double current = 0;
+                py_float(it->second.wire(), current);
+                num = current == 0 ? 1 : 0;
+            }
+            Value v;
+            v.numeric = true;
+            v.num = num;
+            it->second = v;
+            return value_line(param, v, reply) ? Outcome::Reply : Outcome::Fatal;
+        }
+        Value stored = coerce_and_clip(param, value);
+        it->second = stored;
+        return value_line(param, stored, reply) ? Outcome::Reply : Outcome::Fatal;
+    }
+
+    bool enter_session() {
+        std::lock_guard<std::mutex> lock(session_mu_);
+        const auto now = std::chrono::steady_clock::now();
+        if (active_ > 0 || now < last_close_ + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                                                   std::chrono::duration<double>(opt_.linger)))
+            return false;
+        ++active_;
+        return true;
+    }
+
+    void leave_session() {
+        std::lock_guard<std::mutex> lock(session_mu_);
+        --active_;
+        last_close_ = std::chrono::steady_clock::now();
     }
 
     Value coerce_and_clip(const std::string& param, const std::string& value) const {
@@ -714,6 +797,7 @@ void usage(FILE* to) {
         "                     [--seed PARAM=VALUE]... [--serial DEVICE]... [--fd N]...\n"
         "                     [--write-timeout SECONDS] [--idle-timeout SECONDS]\n"
         "                     [--seed-list PARAM=ITEM;ITEM...]... [--profile] [--log] [--control]\n"
+        "                     [--strict-cp650] [--linger SECONDS]\n"
         "\n"
         "Live fake CP processor (TCP). Default port: the model's documented port.\n"
         "--seed preloads a value for GETs; --seed-list a multi-line reply (the param,\n"
@@ -753,7 +837,7 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
         std::string v;
         const bool is_flag = arg == "--help" || arg == "--no-clip" || arg == "--silent" ||
                              arg == "--partial-response" || arg == "--log" || arg == "--control" ||
-                             arg == "--profile";
+                             arg == "--profile" || arg == "--strict-cp650";
         if (is_flag && has_inline) {
             std::fprintf(stderr, "processor_sim: %s takes no value\n", arg.c_str());
             return false;
@@ -764,6 +848,16 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
         else if (arg == "--partial-response") o.partial_response = true;
         else if (arg == "--log") o.log = true;
         else if (arg == "--profile") o.profile = true;
+        else if (arg == "--strict-cp650") o.strict_cp650 = true;
+        else if (arg == "--linger") {
+            if (!value(v)) return false;
+            char* end = nullptr;
+            o.linger = std::strtod(v.c_str(), &end);
+            if (v.empty() || *end || !std::isfinite(o.linger) || o.linger < 0) {
+                std::fprintf(stderr, "processor_sim: invalid --linger %s\n", v.c_str());
+                return false;
+            }
+        }
         else if (arg == "--seed-list") {
             if (!value(v)) return false;
             const size_t eq3 = v.find('=');

@@ -710,6 +710,23 @@ struct EveryControlTests {
         await model.disconnect()
     }
 
+    /// The CP650 as the manual describes it: format_button takes 0 to 7. With
+    /// the old 1 to 8 numbering, button 8 answered `error` and was lost.
+    @Test func cp650StrictSimulatorTakesEveryFormatButton() async throws {
+        let sim = try await Simulator(model: .cp650, extraArguments: ["--strict-cp650"])
+        defer { sim.stop() }
+        for button in [1, 5, 8] {
+            let model = makeModel(sim)
+            await model.connect()
+            #expect(await eventually { model.isConnected && model.formatButton != nil })
+            model.pressButton(button)
+            try await Task.sleep(for: .seconds(1))
+            await model.disconnect()
+            #expect(await eventually { await probe(sim, "format_button") == String(button - 1) },
+                    "format button \(button)")
+        }
+    }
+
     @Test func cp750EverySevenInputAndMute() async throws {
         let sim = try await Simulator(model: .cp750)
         defer { sim.stop() }
