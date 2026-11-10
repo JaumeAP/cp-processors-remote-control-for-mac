@@ -1,5 +1,12 @@
 # CP Remote release notes
 
+## 1.0.4 (2026-11-10)
+- A change whose write to the unit timed out is no longer sent a second time: the line could already be on the wire, and a second copy could repeat it or follow a fragment on a serial line.
+- The app has an icon, and macOS can now say why the app asks to reach the local network.
+- After you choose Disconnect, the background poll no longer reopens the link.
+- CPx50Comms is a library product of the package, so other packages can use it.
+- Everything in 1.0.3 is included.
+
 ## 1.0.3 (2026-11-10)
 - The disk image now holds Release Notes.pdf next to the app, with the changes of every version, newest first.
 - Everything in 1.0.2 is included.
