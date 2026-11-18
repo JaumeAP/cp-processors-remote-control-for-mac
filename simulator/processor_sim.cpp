@@ -296,6 +296,9 @@ struct Options {
     bool profile = false;  // seed what the control plugin polls
     bool strict_cp650 = false;  // CP650 as Dolby's manual describes it (see Sim::respond_strict)
     double linger = 0.0;        // strict mode: seconds a closed session still blocks the next one
+    // CP650 queries answered: "any" (KEY? and KEY=?), "bare" (KEY? only) or
+    // "equals" (KEY=? only). The other form is echoed and draws no reply.
+    std::string query_form = "any";
     std::vector<std::string> serial;
     std::vector<int> fds;  // inherited descriptors to serve, like serve_fd()
 };
@@ -649,6 +652,11 @@ private:
     }
 
     Outcome respond(const std::string& line, std::string& reply) {
+        if (key_value_ && opt_.query_form != "any" && !line.empty() && line.back() == '?') {
+            const std::string head = py_strip(line.substr(0, line.size() - 1));
+            const bool equals = !head.empty() && head.back() == '=';
+            if (equals != (opt_.query_form == "equals")) return Outcome::None;
+        }
         auto parsed = parse(line);
         if (!parsed) return Outcome::None;
         const std::string& param = parsed->first;
@@ -811,7 +819,7 @@ void usage(FILE* to) {
         "                     [--seed PARAM=VALUE]... [--serial DEVICE]... [--fd N]...\n"
         "                     [--write-timeout SECONDS] [--idle-timeout SECONDS]\n"
         "                     [--seed-list PARAM=ITEM;ITEM...]... [--profile] [--log] [--control]\n"
-        "                     [--strict-cp650] [--linger SECONDS]\n"
+        "                     [--strict-cp650] [--linger SECONDS] [--query-form any|bare|equals]\n"
         "\n"
         "Live fake CP processor (TCP). Default port: the model's documented port.\n"
         "--seed preloads a value for GETs; --seed-list a multi-line reply (the param,\n"
@@ -822,7 +830,8 @@ void usage(FILE* to) {
         "descriptor (a pty master). --control reads commands on stdin (set, state,\n"
         "received) and answers on stdout; for test harnesses. --write-timeout (default\n"
         "2) bounds a send to a client that stopped reading; --idle-timeout (default\n"
-        "300) drops a TCP client silent that long.\n",
+        "300) drops a TCP client silent that long. --query-form (CP650, default any)\n"
+        "answers only KEY? (bare) or only KEY=? (equals); the other form gets no reply.\n",
         to);
 }
 
@@ -916,6 +925,12 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
             if (!value(o.model)) return false;
             if (!MODELS.count(o.model)) {
                 std::fprintf(stderr, "processor_sim: invalid --model %s\n", o.model.c_str());
+                return false;
+            }
+        } else if (arg == "--query-form") {
+            if (!value(o.query_form)) return false;
+            if (o.query_form != "any" && o.query_form != "bare" && o.query_form != "equals") {
+                std::fprintf(stderr, "processor_sim: invalid --query-form %s\n", o.query_form.c_str());
                 return false;
             }
         } else if (arg == "--host") {

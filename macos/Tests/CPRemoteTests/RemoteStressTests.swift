@@ -976,7 +976,7 @@ struct ReconnectAfterCutTests {
         log.flush()
         let text = try String(contentsOf: log.url, encoding: .utf8)
         for expected in ["app: connect to 127.0.0.1 as CP650", "link: connect succeeded",
-                         "link: status initializing -> ok (connect)", "link: send fader_level=?",
+                         "link: status initializing -> ok (connect)", "link: send fader_level?",
                          "link: recv fader_level=70", "app: panel read: controls enabled",
                          "app: disconnect requested"] {
             #expect(text.contains(expected), "missing: \(expected)")
@@ -1004,6 +1004,32 @@ struct SlowReplyTests {
         }
         #expect(await sim.command("set latency 0") == "OK\n")
         #expect(await eventually(10) { await probe(sim, "mute") == "1" })
+        await model.disconnect()
+    }
+}
+
+/// The report of 2026-11-16 (1.0.6 on a real CP650): the panel stayed
+/// inactive until a key was pressed on the unit, then allowed one change.
+/// Against a unit that answers either query form, the panel is read, and
+/// stays usable through several changes in a row.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct QueryFormTests {
+    @Test(arguments: ["bare", "equals"])
+    func thePanelIsReadAndStaysUsable(form: String) async throws {
+        let sim = try await Simulator(extraArguments: ["--query-form", form])
+        defer { sim.stop() }
+        let model = try await connected(sim)
+        for button in [2, 5, 8] {
+            model.pressButton(button)
+            #expect(await eventually(10) { await probe(sim, "format_button") == String(button - 1) },
+                    "form \(form), button \(button)")
+            #expect(model.isConnected, "form \(form): controls disabled after button \(button)")
+        }
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "mute") == "1" })
+        try await Task.sleep(for: .seconds(3))
+        #expect(model.isConnected, "form \(form): controls disabled after the changes")
         await model.disconnect()
     }
 }

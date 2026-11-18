@@ -47,7 +47,7 @@ public enum ProtocolError: Error, Equatable {
 /// Per-model formatting and parsing of wire lines. Stateless.
 ///
 /// 1. SET: `param=value` (CP650) or `param value` (the others).
-/// 2. Query: `param?` (CP650) or `param ?` (the others).
+/// 2. Query: `param?` or `param=?` (CP650), or `param ?` (the others).
 /// 3. Replies are split into lines and `(param, value)` pairs.
 /// 4. Only CR, LF and non-ASCII are refused; spaces, `=`, `?` and other
 ///    control bytes pass.
@@ -66,12 +66,20 @@ public enum WireProtocol {
         }
     }
 
-    /// The query line, without the trailing newline.
+    /// The query line, without the trailing newline: the first of `queryForms`.
     public static func formatQuery(model: ProcessorModel, param: String) throws(ProtocolError) -> String {
+        try queryForms(model: model, param: param)[0]
+    }
+
+    /// Every form a query can take, the one to try first at the head. The
+    /// CP650 has two: `KEY?`, which a real unit answered (CP650 Remote 1.0,
+    /// 2026-11-10), and `KEY=?`, the form of the manual, which a unit
+    /// running 1.0.6 appeared not to answer (report of 2026-11-16).
+    public static func queryForms(model: ProcessorModel, param: String) throws(ProtocolError) -> [String] {
         try requireFramable(param, .param)
         switch model.dialect {
-        case .keyValue: return "\(param)=?"
-        case .paramValue: return "\(param) ?"
+        case .keyValue: return ["\(param)?", "\(param)=?"]
+        case .paramValue: return ["\(param) ?"]
         }
     }
 
