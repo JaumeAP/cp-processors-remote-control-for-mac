@@ -430,6 +430,7 @@ public:
     // simulator's plain attributes and test hooks. Writes the reply to `out`:
     //   set <silent|partial|clip> <0|1> | set latency <seconds> |
     //   set drop_after <n|none>          -> OK
+    //   set ignore <param|none>          -> OK  (queries of that param get no reply)
     //   state                            -> STATE <hex param> <hex value> <n|s> ... END
     //   received                         -> RECV <hex line> ... END
     // Returns false for an unknown command.
@@ -448,6 +449,10 @@ public:
             else if (w[1] == "clip") clip_ = w[2] == "1";
             else if (w[1] == "latency") latency_ = std::strtod(w[2].c_str(), nullptr);
             else if (w[1] == "drop_after") drop_after_ = w[2] == "none" ? -1 : std::strtol(w[2].c_str(), nullptr, 10);
+            else if (w[1] == "ignore") {
+                std::lock_guard<std::mutex> lock(mu_);
+                ignored_ = w[2] == "none" ? std::string() : w[2];
+            }
             else return false;
             out = "OK\n";
             return true;
@@ -482,6 +487,7 @@ private:
     bool key_value_;
     std::mutex mu_;
     std::map<std::string, Value> state_;
+    std::string ignored_;  // guarded by mu_: queries of this param are not answered
     std::atomic<double> latency_;
     std::atomic<long> drop_after_;
     std::atomic<bool> clip_;
@@ -663,6 +669,7 @@ private:
         const std::string& value = parsed->second;
 
         std::lock_guard<std::mutex> lock(mu_);
+        if (value == "?" && !ignored_.empty() && param == ignored_) return Outcome::None;
         if (strict_) return respond_strict(param, value, reply);
         if (value == "?") {
             auto it = state_.find(param);

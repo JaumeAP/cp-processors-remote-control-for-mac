@@ -287,8 +287,9 @@ public actor DolbyCP {
     /// Query a parameter whose reply is several lines: the header line that
     /// names it, then one line per item (the CP850 / CP950 `sys.macros`).
     /// The items are the lines that follow the header, each waited for up to
-    /// `itemTimeout`, at most `limit` of them. Nil when the header does not
-    /// come, or names something else.
+    /// `itemTimeout`, at most `limit` of them. Stale or unsolicited lines
+    /// before the header are skipped (at most `resyncMax`), as `get` does.
+    /// Nil when the header does not come.
     public func getList(_ param: String, timeout: Double = ProtocolTiming.queryTimeout,
                         itemTimeout: Double = 0.3, limit: Int = 64) async throws(ProtocolError) -> [String]? {
         if !(await linkUp()), autoReconnect { _ = await reopenForCommand() }
@@ -308,12 +309,20 @@ public actor DolbyCP {
             return nil
         }
         try? await Task.sleep(for: .seconds(gap))
-        guard let header = await readLogged(timeout: timeout) else {
-            mark(.missing, "no reply to \(line) within \(timeout) s")
-            return nil
+        var skipped = 0
+        while true {
+            guard let header = await readLogged(timeout: timeout) else {
+                if skipped == 0 { mark(.missing, "no reply to \(line) within \(timeout) s") }
+                return nil
+            }
+            let name = header.split(whereSeparator: { $0 == " " || $0 == "\t" }).first.map(String.init) ?? header
+            if sameScalars(name, param) { break }
+            skipped += 1
+            if skipped > Self.resyncMax {
+                record("gave up looking for \(param) after \(skipped) other lines")
+                return nil
+            }
         }
-        let name = header.split(whereSeparator: { $0 == " " || $0 == "\t" }).first.map(String.init) ?? header
-        guard sameScalars(name, param) else { return nil }
         mark(.ok)
         lastActivity = .now
         var items: [String] = []
