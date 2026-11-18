@@ -40,8 +40,10 @@ answering, and an automatic reconnect with back-off.
    control's new value over a poll reply that was read before the change
    reached the processor.
 3. `PanelProfile` (in `RemoteModel`): each model's parameter names and scales.
-4. `FrontPanelView` (CP650), `OtherPanels` (CP750, CP850 / CP950): the drawn
-   fronts. Positions are fractions of the panel, so they scale with the window.
+4. `FrontPanelView` (CP650), `OtherPanels` (CP750, CP850, CP950 / CP950A):
+   the drawn fronts, after the manuals' figures (the CP850 after Dolby's
+   product photos). Positions are fractions of the panel, so they scale with
+   the window.
 5. `SetupView`: the processor choice, the address and the Test button.
 
 ## The connection log

@@ -1,13 +1,14 @@
-// The CP750 and the CP850/CP950 fronts, drawn after the front-panel figures
-// of their manuals: the CP750 manual's figure 1-1, and the CP950/CP950A
-// manual's figure 1. Each element sits where the figure puts it, as a
-// fraction of the panel's width and height.
+// The CP750, CP850 and CP950 fronts. The CP750 and CP950 are drawn after the
+// front-panel figures of their manuals (the CP750 manual's figure 1-1, the
+// CP950/CP950A manual's figure 1); the CP850, which has no such figure in the
+// manuals we could get, after Dolby's own product photos of it. Each element
+// sits where the figure or photo puts it, as a fraction of the panel's width
+// and height.
 //
-// The CP850 has no front-panel figure in the manuals we could get: it is
-// drawn with the CP950 front. The controls the manuals name are live: the
-// CP750's input buttons, mute and fader, and the CP950's fader and mute
-// (on its screen). The lamps, the menu keys and the booth knob have no
-// command the app knows, so they are drawn but do nothing.
+// The controls the app has commands for are live: the CP750's input buttons,
+// mute and fader; the CP850's fader, mute and eight macro keys; the CP950's
+// fader and mute (on its screen) and its macro list. The lamps, the menu and
+// navigation keys, the power key and the booth knob are drawn but do nothing.
 
 import CPx50Comms
 import SwiftUI
@@ -145,7 +146,139 @@ struct CP750Panel: View {
     }
 }
 
-// MARK: - CP850 / CP950
+// MARK: - CP850
+
+/// A black round key of the CP850 with its engraved label; `lit` colours the
+/// label (the selected macro's number glows blue on the unit).
+private struct DarkKey: View {
+    let diameter: CGFloat
+    var label: String = ""
+    var symbol: String? = nil
+    var lit: Color? = nil
+    var enabled: Bool = true
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        let face = ZStack {
+            Circle().fill(RadialGradient(colors: [Color(white: 0.25), Color(white: 0.03)],
+                                         center: .init(x: 0.4, y: 0.3), startRadius: 0, endRadius: diameter))
+            Circle().stroke(Color(white: 0.55), lineWidth: diameter * 0.05)
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: diameter * 0.42, weight: .bold))
+                    .foregroundStyle(lit ?? Color(white: 0.85))
+            } else {
+                Text(label)
+                    .font(.system(size: diameter * 0.45, weight: .bold))
+                    .foregroundStyle(lit ?? Color(white: 0.85))
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .shadow(color: lit ?? .clear, radius: diameter * 0.2)
+        if let action {
+            Button(action: action) { face.contentShape(Circle()) }
+                .buttonStyle(.plain)
+                .disabled(!enabled)
+                .opacity(enabled ? 1 : 0.45)
+        } else {
+            face.accessibilityHidden(true)
+        }
+    }
+}
+
+/// The CP850 front, after Dolby's product photos (no front-panel figure in
+/// the manuals we could get).
+struct CP850Panel: View {
+    @ObservedObject var model: RemoteModel
+
+    private static let macroX: [CGFloat] = (0..<8).map { 0.648 + 0.0315 * CGFloat($0) }
+    private static let blue = Color(red: 0.25, green: 0.55, blue: 1)
+
+    /// The macro a key selects: the key's place in the unit's macro list, or
+    /// its number when the list has not been read.
+    private func macroNumber(forKey key: Int) -> Int {
+        if let macros = model.macros, macros.indices.contains(key - 1) { return macros[key - 1].number }
+        return key
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let g = Grid(w: geo.size.width, h: geo.size.height)
+            ZStack {
+                // Rack ears and the black front.
+                Rectangle().fill(Color(white: 0.06))
+                g.rect(0.5, 0.5, 0.9, 0.98, fill: LinearGradient(colors: [Color(white: 0.13), Color(white: 0.05)],
+                                                                 startPoint: .top, endPoint: .bottom),
+                       radius: g.h * 0.03)
+                // The left block: Dolby mark, the fader knob (live), mute (live).
+                g.label("DOLBY", 0.17, 0.17, size: 0.12, width: 0.12, weight: .heavy, color: Color(white: 0.9))
+                g.put(0.165, 0.52, FaderKnob(model: model, diameter: g.h * 0.5))
+                g.put(0.262, 0.52, DarkKey(diameter: g.h * 0.13, symbol: "speaker.slash.fill",
+                                           lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
+                                           enabled: model.isConnected) { model.toggleMute() }
+                    .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
+                // The blue light strip between the blocks.
+                g.rect(0.312, 0.5, 0.004, 0.94, fill: Self.blue, radius: 1)
+                // The brushed aluminium inlay, a long capsule.
+                g.rect(0.655, 0.49, 0.62, 0.44, fill: LinearGradient(colors: [Color(white: 0.88), Color(white: 0.66)],
+                                                                     startPoint: .top, endPoint: .bottom),
+                       radius: g.h * 0.22)
+                // The four-line LCD: the fader and the macro, then the menu.
+                g.rect(0.435, 0.49, 0.175, 0.33, fill: Color(red: 0.62, green: 0.74, blue: 0.78), radius: g.h * 0.02)
+                lcdLine("Fader: \(model.levelTextWithUnit)", g, row: 0)
+                    .onTapGesture { model.toggleLevelUnit() }
+                    .accessibilityLabel("Fader \(model.levelTextWithUnit)")
+                    .accessibilityHint("Switches between the fader number and decibels")
+                    .accessibilityAddTraits(.isButton)
+                lcdLine(model.macroName.map { " \($0)" } ?? "", g, row: 1)
+                lcdLine("\u{22A0}Macros  \u{25A1}Network", g, row: 2).accessibilityHidden(true)
+                lcdLine("\u{25A1}Messages \u{25A1}Options", g, row: 3).accessibilityHidden(true)
+                // The navigation cross (no wire command here).
+                let navKey = g.h * 0.11
+                g.put(0.565, 0.33, DarkKey(diameter: navKey, symbol: "chevron.up"))
+                g.put(0.54, 0.49, DarkKey(diameter: navKey, symbol: "chevron.left"))
+                g.put(0.565, 0.49, DarkKey(diameter: navKey, symbol: "circle.fill"))
+                g.put(0.59, 0.49, DarkKey(diameter: navKey, symbol: "chevron.right"))
+                g.put(0.54, 0.65, DarkKey(diameter: navKey, symbol: "arrow.uturn.left"))
+                g.put(0.565, 0.65, DarkKey(diameter: navKey, symbol: "chevron.down"))
+                // The eight macro keys (live); the selected macro's number is blue.
+                ForEach(1...8, id: \.self) { key in
+                    let number = macroNumber(forKey: key)
+                    let selected = model.macroPreset == number
+                    g.put(Self.macroX[key - 1], 0.49,
+                          DarkKey(diameter: g.h * 0.12, label: "\(key)", lit: selected ? Self.blue : nil,
+                                  enabled: model.isConnected) { model.selectMacro(number) }
+                            .accessibilityLabel(macroLabel(key: key, number: number))
+                            .accessibilityAddTraits(selected ? .isSelected : []))
+                }
+                // The power key, at the right end (no wire command here).
+                g.put(0.93, 0.49, DarkKey(diameter: g.h * 0.12, symbol: "power"))
+                g.label("Dolby Atmos Cinema Processor CP850", 0.82, 0.86, size: 0.075, width: 0.3,
+                        weight: .medium, italic: true, color: Color(white: 0.85))
+            }
+        }
+        .aspectRatio(ProcessorModel.cp850.aspect, contentMode: .fit)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// One line of the LCD, in the unit's monospaced dark lettering.
+    private func lcdLine(_ text: String, _ g: Grid, row: Int) -> some View {
+        Text(text)
+            .font(.system(size: g.h * 0.074, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color(red: 0.06, green: 0.12, blue: 0.16))
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(width: g.w * 0.165, alignment: .leading)
+            .position(x: g.w * 0.435, y: g.h * (0.375 + 0.077 * CGFloat(row)))
+    }
+
+    private func macroLabel(key: Int, number: Int) -> String {
+        let name = model.macros?.first { $0.number == number }?.name
+        return "Macro key \(key)" + (name.map { ": \($0)" } ?? "")
+    }
+}
+
+// MARK: - CP950
 
 /// The CP950 front, after figure 1 of the CP950 and CP950A manual.
 struct CP950Panel: View {

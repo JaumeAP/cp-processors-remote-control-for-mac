@@ -629,7 +629,7 @@ struct RemoteStressTests {
     }
 }
 
-/// The CP750 and the CP950 (its CP850 / CP950 front): each model's own
+/// The CP750 and the CP950: each model's own
 /// parameter names and scales, as their manuals give them, against the
 /// simulator.
 @MainActor
@@ -891,10 +891,11 @@ struct ReconnectAfterCutTests {
 }
 
 /// Every front panel draws, the same way twice (a blank or unstable panel
-/// fails here). The pictures are not kept.
+/// fails here). The pictures are kept only when CPREMOTE_RENDER_DIR names a
+/// folder.
 @MainActor
 @Suite struct PanelRenderTests {
-    @Test(arguments: [ProcessorModel.cp650, .cp750, .cp950])
+    @Test(arguments: [ProcessorModel.cp650, .cp750, .cp850, .cp950])
     func frontDrawsDeterministically(_ processor: ProcessorModel) throws {
         let model = RemoteModel(defaults: UserDefaults(suiteName: "CPRemoteTests.render")!, log: nil)
         model.choose(processor)
@@ -910,6 +911,10 @@ struct ReconnectAfterCutTests {
         }
         let first = try render()
         let second = try render()
+        // CPREMOTE_RENDER_DIR keeps the picture, to look at a front by eye.
+        if let folder = ProcessInfo.processInfo.environment["CPREMOTE_RENDER_DIR"], !folder.isEmpty {
+            try first.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(processor.rawValue).png"))
+        }
         #expect(first.count > 20_000, "a blank panel would be almost empty")
         #expect(first == second, "the same state must draw the same picture")
     }
