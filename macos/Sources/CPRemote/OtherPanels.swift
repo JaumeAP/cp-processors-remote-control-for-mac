@@ -194,13 +194,6 @@ struct CP850Panel: View {
     private static let macroX: [CGFloat] = (0..<8).map { 0.648 + 0.0315 * CGFloat($0) }
     private static let blue = Color(red: 0.25, green: 0.55, blue: 1)
 
-    /// The macro a key selects: the key's place in the unit's macro list, or
-    /// its number when the list has not been read.
-    private func macroNumber(forKey key: Int) -> Int {
-        if let macros = model.macros, macros.indices.contains(key - 1) { return macros[key - 1].number }
-        return key
-    }
-
     var body: some View {
         GeometryReader { geo in
             let g = Grid(w: geo.size.width, h: geo.size.height)
@@ -241,14 +234,16 @@ struct CP850Panel: View {
                 g.put(0.59, 0.49, DarkKey(diameter: navKey, symbol: "chevron.right"))
                 g.put(0.54, 0.65, DarkKey(diameter: navKey, symbol: "arrow.uturn.left"))
                 g.put(0.565, 0.65, DarkKey(diameter: navKey, symbol: "chevron.down"))
-                // The eight macro keys (live); the selected macro's number is blue.
+                // The eight macro keys (live): key n sends sys.macro_preset n,
+                // "change to a macro by number", 1 to 8 as mapped in the macro
+                // editor (CP950/CP950A manual issue 9, table 18, p. 157; the
+                // CP850 uses the same command). The selected key's number is blue.
                 ForEach(1...8, id: \.self) { key in
-                    let number = macroNumber(forKey: key)
-                    let selected = model.macroPreset == number
+                    let selected = model.macroPreset == key
                     g.put(Self.macroX[key - 1], 0.49,
                           DarkKey(diameter: g.h * 0.12, label: "\(key)", lit: selected ? Self.blue : nil,
-                                  enabled: model.isConnected) { model.selectMacro(number) }
-                            .accessibilityLabel(macroLabel(key: key, number: number))
+                                  enabled: model.isConnected) { model.selectMacro(key) }
+                            .accessibilityLabel(macroLabel(key: key))
                             .accessibilityAddTraits(selected ? .isSelected : []))
                 }
                 // The power key, at the right end (no wire command here).
@@ -272,8 +267,8 @@ struct CP850Panel: View {
             .position(x: g.w * 0.435, y: g.h * (0.375 + 0.077 * CGFloat(row)))
     }
 
-    private func macroLabel(key: Int, number: Int) -> String {
-        let name = model.macros?.first { $0.number == number }?.name
+    private func macroLabel(key: Int) -> String {
+        let name = model.macros?.first { $0.number == key }?.name
         return "Macro key \(key)" + (name.map { ": \($0)" } ?? "")
     }
 }
