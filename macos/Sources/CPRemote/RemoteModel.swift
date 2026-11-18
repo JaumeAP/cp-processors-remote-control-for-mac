@@ -87,6 +87,8 @@ final class RemoteModel: ObservableObject {
     @Published private(set) var macros: [Macro]?
     private var macroMisses = 0
     private var macroListDue = true
+    /// The macro number `macroName` belongs to; nil when no name is known.
+    private var macroNameNumber: Int?
 
     struct Macro: Equatable, Sendable {
         let number: Int
@@ -297,10 +299,11 @@ final class RemoteModel: ObservableObject {
     func selectMacro(_ number: Int) {
         guard let cp = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
         macroPreset = number
-        // The new macro's name from the list; unknown, it is cleared so the
-        // next poll reads it (it would otherwise keep the old macro's name:
-        // the number already matches, so the poll would not ask again).
+        // The new macro's name from the list; unknown, it is blank until the
+        // poll reads it (the poll asks whenever the name shown is not the
+        // selected macro's: `macroNameNumber`).
         macroName = macros?.first(where: { $0.number == number })?.name
+        macroNameNumber = macroName == nil ? nil : number
         localChange[Self.macroPresetParam] = .now
         localChange[nameParam] = .now
         Task { _ = try? await cp.set(Self.macroPresetParam, .int(number), timeout: Self.setReplyTimeout) }
@@ -381,6 +384,7 @@ final class RemoteModel: ObservableObject {
         macroListDue = true
         silentPolls = 0
         macroName = nil
+        macroNameNumber = nil
         macroPreset = nil
         macros = nil
         macroMisses = 0
@@ -426,6 +430,7 @@ final class RemoteModel: ObservableObject {
         processorHost = nil
         programmedFormats = nil
         macroName = nil
+        macroNameNumber = nil
         macroPreset = nil
         macros = nil
         panelRead = false
@@ -597,22 +602,31 @@ final class RemoteModel: ObservableObject {
         }
 
         // The selected macro, for the screen: its number every poll, its name
-        // when the number changes, the list once per link. A processor that
-        // never answers is given up on after two misses (each costs a read
-        // timeout).
+        // whenever the name shown is not that macro's, the list once per
+        // link. A processor that never answers is given up on after two
+        // unanswered reads (each costs a read timeout); a reply held back
+        // because the macro was just changed here is not a miss.
         if let nameParam = panel.macroName, macroMisses < 2, isCurrent(cp) {
             start = .now
-            if let reply = try? await cp.get(Self.macroPresetParam), isCurrent(cp) {
-                if let number = Int(reply.trimmingCharacters(in: .whitespaces)),
-                   await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp),
-                   macroPreset != number || macroName == nil {
-                    start = .now
-                    if let name = try? await cp.get(nameParam), isCurrent(cp),
-                       await mayApply(nameParam, readStartedAt: start, on: cp), isCurrent(cp) {
-                        macroPreset = number
-                        macroName = name.trimmingCharacters(in: .whitespaces)
-                    } else {
-                        macroMisses += 1
+            let presetReply = try? await cp.get(Self.macroPresetParam)
+            guard isCurrent(cp) else { return }
+            if let presetReply {
+                if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
+                   await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp) {
+                    macroPreset = number
+                    if macroNameNumber != number {
+                        start = .now
+                        let nameReply = try? await cp.get(nameParam)
+                        guard isCurrent(cp) else { return }
+                        if let nameReply {
+                            if await mayApply(nameParam, readStartedAt: start, on: cp), isCurrent(cp),
+                               macroPreset == number {
+                                macroName = nameReply.trimmingCharacters(in: .whitespaces)
+                                macroNameNumber = number
+                            }
+                        } else {
+                            macroMisses += 1
+                        }
                     }
                 }
             } else {
