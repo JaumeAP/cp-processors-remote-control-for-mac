@@ -42,8 +42,8 @@ public actor TCPTransport: LineTransport {
                 writeTimeout: Double = ProtocolTiming.writeTimeout) {
         self.host = host
         self.port = port
-        self.connectTimeout = connectTimeout
-        self.writeTimeout = writeTimeout
+        self.connectTimeout = ProtocolTiming.clamped(connectTimeout)
+        self.writeTimeout = ProtocolTiming.clamped(writeTimeout)
     }
 
     deinit {
@@ -125,7 +125,7 @@ public actor TCPTransport: LineTransport {
 
     public func readLine(timeout: Double) async -> String? {
         guard connection != nil else { return nil }
-        let deadline = ContinuousClock.now + .seconds(timeout)
+        let deadline = ContinuousClock.now + .seconds(ProtocolTiming.clamped(timeout))
         while true {
             if failed { return nil }
             if case .done(let line) = buffer.read() { return line }

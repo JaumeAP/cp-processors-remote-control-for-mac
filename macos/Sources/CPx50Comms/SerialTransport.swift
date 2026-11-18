@@ -40,7 +40,7 @@ public actor SerialTransport: LineTransport {
     public init(device: String, baudrate: Int = 9600, writeTimeout: Double = ProtocolTiming.writeTimeout) {
         self.device = device
         self.baudrate = baudrate
-        self.writeTimeout = writeTimeout
+        self.writeTimeout = ProtocolTiming.clamped(writeTimeout)
     }
 
     deinit {
@@ -94,7 +94,7 @@ public actor SerialTransport: LineTransport {
 
     public func readLine(timeout: Double) async -> String? {
         guard let current = link else { return nil }
-        let deadline = ContinuousClock.now + .seconds(timeout)
+        let deadline = ContinuousClock.now + .seconds(ProtocolTiming.clamped(timeout))
         while true {
             if case .done(let line) = buffer.read() { return line }
             guard !Task.isCancelled else { return nil }
