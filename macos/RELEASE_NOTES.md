@@ -1,5 +1,11 @@
 # CP Remote release notes
 
+## 1.0.11 (2026-11-18)
+- CP650: a query is sent as `KEY?` again, the form a real unit answered with version 1.0. When it draws no reply, the query is repeated as `KEY=?` (the form of the manual, used since 1.0.6), and whichever form the unit answers is used from then on. With 1.0.6 a CP650 appeared not to answer `KEY=?`: the panel stayed inactive until a key was pressed on the unit, then allowed one change.
+- One exchange left unanswered no longer disables the controls. They are disabled when the link is down, or when a fader read gets no reply through all its retries, and enabled again once the panel has been read.
+- The connection log records which query form the unit answers.
+- Everything in 1.0.10 is included.
+
 ## 1.0.10 (2026-11-10)
 - CP850, CP950 and CP950A: the macros of the processor are listed on the screen, the selected one in white; click one to select it. A new Macro menu does the same with Option-Command-1 to 9, and Next Macro / Previous Macro (Option-Command-Right / Left Arrow). The list and the selected macro are read from the unit.
 - The level can be shown in decibels instead of the fader number, on every model: 7.0 is 0 dB, from -90 dB at 0.0 to +10 dB at 10. Click the level display, or choose Level, Show Level in dB (Command-D). The choice is remembered.

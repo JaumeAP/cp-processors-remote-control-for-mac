@@ -24,11 +24,41 @@ struct EventLogTests {
         await cp.disconnect()
 
         let text = events.lines.joined(separator: "\n")
-        for expected in ["connect succeeded", "status initializing -> ok (connect)", "send fader_level=?",
-                         "recv fader_level=70", "send no_such_param=?", "recv <nothing within 0.3 s>",
+        for expected in ["connect succeeded", "status initializing -> ok (connect)", "send fader_level?",
+                         "recv fader_level=70", "send no_such_param?", "recv <nothing within 0.3 s>",
                          "disconnect"] {
             #expect(text.contains(expected), "missing: \(expected)\n\(text)")
         }
+    }
+
+    /// A CP650 that answers only `KEY=?`: the first query falls back to it on
+    /// its retry, and every later query is sent that way from the start.
+    @Test func aCP650ThatAnswersOnlyTheEqualsFormIsLearned() async throws {
+        let sim = try await Simulator(extraArguments: ["--query-form", "equals", "--log"])
+        defer { sim.stop() }
+        let events = Collector()
+        let cp = fastClient(sim.port, getRetries: 1)
+        await cp.setEventLog { events.add($0) }
+        #expect(await cp.connect())
+        #expect(try await cp.get("fader_level", timeout: 0.3) == "70")
+        #expect(events.lines.contains("queries are sent as fader_level=? from now on"))
+        let before = sim.received().count
+        #expect(try await cp.get("mute", timeout: 0.3) == "0")
+        #expect(Array(sim.received().dropFirst(before)) == ["mute=?"])
+        await cp.disconnect()
+    }
+
+    /// A CP650 that answers only `KEY?` (as the unit that ran 1.0 did): one
+    /// query, no retry, no switch.
+    @Test func aCP650ThatAnswersOnlyTheBareFormIsAnsweredAtOnce() async throws {
+        let sim = try await Simulator(extraArguments: ["--query-form", "bare", "--log"])
+        defer { sim.stop() }
+        let cp = fastClient(sim.port, getRetries: 0)
+        #expect(await cp.connect())
+        #expect(try await cp.get("fader_level", timeout: 0.3) == "70")
+        #expect(try await cp.get("mute", timeout: 0.3) == "0")
+        #expect(sim.received() == ["fader_level?", "mute?"])
+        await cp.disconnect()
     }
 
     @Test func switchingTheLogOffStopsTheEvents() async throws {

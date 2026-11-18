@@ -6,6 +6,8 @@
 ///    requeues a SET whose send never reached the wire.
 /// 2. `get` is the one blocking call: it waits its turn, retries a lost or
 ///    timed-out query, and skips stale lines that do not name the param.
+///    On a model with two query forms (the CP650), each retry uses the next
+///    form, and the form that was answered is used from then on.
 /// 3. Every exchange updates the status: a parsed reply or `ACK` → ok, no
 ///    line at all → missing; a line that does not parse leaves it as it is.
 /// 4. A SET counts as applied when its reply does not parse at all, or names
@@ -46,6 +48,9 @@ public actor DolbyCP {
     /// Receives one line per event of the link; nil by default.
     private var eventLog: (@Sendable (String) -> Void)?
     private var turnQueue: [CheckedContinuation<Void, Never>] = []
+    /// The index, in `WireProtocol.queryForms`, of the query form to send:
+    /// the one the processor last answered.
+    private var queryForm = 0
 
     /// A client over TCP to `host`, on `port` or the model's default port.
     public init(host: String, port: UInt16? = nil, model: ProcessorModel = .cp750,
@@ -222,15 +227,21 @@ public actor DolbyCP {
             mark(.missing, "get: link is down")
             return nil
         }
-        let line = try WireProtocol.formatQuery(model: model, param: param)
+        let forms = try WireProtocol.queryForms(model: model, param: param)
         let attempts = getRetries + 1
         for attempt in 0..<attempts {
+            let form = (queryForm + attempt) % forms.count
+            let line = forms[form]
             await acquire()
             let response = await transact(line, timeout: timeout, expect: param).response
             release()
             if let response,
                let pair = WireProtocol.parseResponse(model: model, text: response)
                 .first(where: { sameScalars($0.param, param) }) {
+                if form != queryForm {
+                    queryForm = form
+                    record("queries are sent as \(line) from now on")
+                }
                 state.set(param, .string(pair.value))
                 return pair.value
             }
@@ -253,7 +264,7 @@ public actor DolbyCP {
             mark(.missing, "get: link is down")
             return nil
         }
-        let line = try WireProtocol.formatQuery(model: model, param: param)
+        let line = try preferredQuery(param)
         await acquire()
         defer { release() }
         do {
@@ -373,7 +384,7 @@ public actor DolbyCP {
     }
 
     private func pollOnce(_ param: String) async {
-        guard let line = try? WireProtocol.formatQuery(model: model, param: param) else { return }
+        guard let line = try? preferredQuery(param) else { return }
         await acquire()
         guard !Task.isCancelled else {
             release()
@@ -481,6 +492,12 @@ public actor DolbyCP {
             mark(.missing, "no reply to \(line) within \(timeout) s")
         }
         return (response, true)
+    }
+
+    /// The query line for `param` in the form the processor last answered.
+    private func preferredQuery(_ param: String) throws(ProtocolError) -> String {
+        let forms = try WireProtocol.queryForms(model: model, param: param)
+        return forms[queryForm % forms.count]
     }
 
     /// No reply → not applied; a reply with no pair (an `ACK`, or anything

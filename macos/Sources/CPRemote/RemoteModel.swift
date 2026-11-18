@@ -157,8 +157,10 @@ final class RemoteModel: ObservableObject {
     /// No fader value waiting to be handed to the client or being handed.
     var faderIsSettled: Bool { pendingFader == nil && !faderInFlight }
 
-    /// The controls work: a link, answering, and the panel read on it.
-    var isConnected: Bool { processor != nil && status == .ok && panelRead }
+    /// The controls work: a link with the panel read on it. One exchange
+    /// without a reply does not disable them; a link that is down, or a fader
+    /// read unanswered through all its retries, does (`markUnread`).
+    var isConnected: Bool { processor != nil && panelRead }
 
     private var trimmedHost: String { host.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -379,6 +381,7 @@ final class RemoteModel: ObservableObject {
         macros = nil
         macroMisses = 0
         message = "Connecting to \(address)…"
+        panelRead = false
         statusTask = Task { [weak self] in
             for await value in cp.statusUpdates {
                 guard let self, self.processor === cp else { return }
@@ -421,25 +424,43 @@ final class RemoteModel: ObservableObject {
         macroName = nil
         macroPreset = nil
         macros = nil
+        panelRead = false
         apply(status: .missing)
         message = "Not connected"
         await cp.disconnect()
     }
 
-    /// Record a status change: a link that stops answering disables the
-    /// controls until the panel has been read again, ends a knob turn, and
-    /// is announced to VoiceOver.
+    /// Record a status change. A status other than ok disables the controls
+    /// only when the link turns out to be down: a single unanswered exchange
+    /// leaves them usable (the CP650 can miss a reply, and a unit pushes
+    /// lines of its own when its keys are pressed).
     private func apply(status value: ProcessorStatus) {
         note("status \(value), panel read \(panelRead)")
         status = value
-        if value != .ok {
-            panelRead = false
-            endKnobTurn()
-        }
-        if let address = processorHost {
-            message = value == .ok ? "Connected to \(address)" : "Lost \(address), retrying…"
-        }
+        updateMessage()
         announceConnectionChange()
+        guard value != .ok, panelRead, let cp = processor else { return }
+        Task { [weak self] in
+            let up = await cp.isLinkUp
+            guard let self, self.processor === cp, !up else { return }
+            self.markUnread("link is down")
+        }
+    }
+
+    /// Disable the controls until the panel has been read again on the
+    /// current link, end a knob turn, and tell VoiceOver.
+    private func markUnread(_ why: String) {
+        endKnobTurn()
+        guard panelRead else { return }
+        panelRead = false
+        note("controls disabled: \(why)")
+        updateMessage()
+        announceConnectionChange()
+    }
+
+    private func updateMessage() {
+        guard let address = processorHost else { return }
+        message = isConnected || status == .ok ? "Connected to \(address)" : "Lost \(address), retrying…"
     }
 
     private func announceConnectionChange() {
@@ -491,6 +512,7 @@ final class RemoteModel: ObservableObject {
             // connect: retry here, so a processor that was off, booting or
             // unreachable at connect time is found when it comes up.
             note("link is down: reconnecting")
+            markUnread("link is down")
             let ok = await cp.reconnect()
             note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
@@ -522,6 +544,7 @@ final class RemoteModel: ObservableObject {
             // but hung, and skip the other reads (each would time out too).
             silentPolls += 1
             note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit))")
+            markUnread("fader read unanswered")
             if silentPolls >= Self.silentPollLimit {
                 note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
                 silentPolls = 0
@@ -541,6 +564,7 @@ final class RemoteModel: ObservableObject {
             if isCurrent(cp), !panelRead {
                 panelRead = true
                 note("panel read: controls enabled")
+                updateMessage()
                 announceConnectionChange()
             }
         }
