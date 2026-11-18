@@ -396,7 +396,7 @@ public actor DolbyCP {
             return
         }
         queue.setInflight(command)
-        let outcome = await transact(line, timeout: command.timeout, expect: nil)
+        let outcome = await transact(line, timeout: command.timeout, expect: nil, setParam: command.param)
         if confirmsSet(outcome.response, command.param) {
             state.set(command.param, command.value)
         }
@@ -424,20 +424,29 @@ public actor DolbyCP {
         }
     }
 
+    /// The watchdog's poll: the preferred query form, then (on a model with
+    /// two, the CP650) the other one, as `get` retries do; the form answered
+    /// is kept.
     private func pollOnce(_ param: String) async {
-        guard let line = try? preferredQuery(param) else { return }
-        await acquire()
-        guard !Task.isCancelled else {
-            release()
-            return
-        }
-        let response = await transact(line, timeout: ProtocolTiming.queryTimeout, expect: param).response
-        release()
-        if let response {
-            for pair in WireProtocol.parseResponse(model: model, text: response)
-            where sameScalars(pair.param, param) {
-                state.set(param, .string(pair.value))
+        guard let forms = try? WireProtocol.queryForms(model: model, param: param) else { return }
+        for attempt in 0..<forms.count {
+            let form = (queryForm + attempt) % forms.count
+            await acquire()
+            guard !Task.isCancelled else {
+                release()
+                return
             }
+            let response = await transact(forms[form], timeout: ProtocolTiming.queryTimeout, expect: param).response
+            release()
+            guard let response,
+                  let pair = WireProtocol.parseResponse(model: model, text: response)
+                    .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") }) else { continue }
+            if form != queryForm {
+                queryForm = form
+                record("queries are sent as \(forms[form]) from now on")
+            }
+            state.set(param, .string(pair.value))
+            return
         }
     }
 
@@ -494,7 +503,11 @@ public actor DolbyCP {
     /// Send one line and read its reply. Must hold the lock. `reachedWire`
     /// is true once the send succeeded, so the drain loop can tell a lost
     /// link (requeue) from a send that drew no or a bad reply (delivered).
-    private func transact(_ line: String, timeout: Double, expect: String?) async
+    /// A query (`expect`) skips lines until the one that answers it; a SET
+    /// (`setParam`) skips lines that name another param, so a stray line
+    /// does not become its reply and leave its echo and reply to the next
+    /// exchange.
+    private func transact(_ line: String, timeout: Double, expect: String?, setParam: String? = nil) async
         -> (response: String?, reachedWire: Bool)
     {
         guard await transport.isConnected() else {
@@ -523,6 +536,23 @@ public actor DolbyCP {
         if read.skippedEcho { gotLine = true; echoPending = false }
         response = read.line
         var pairs: [ResponsePair] = []
+        if let setParam {
+            var skipped = 0
+            while let reply = response {
+                let parsed = WireProtocol.parseResponse(model: model, text: reply)
+                if parsed.isEmpty || parsed.contains(where: { sameScalars($0.param, setParam) }) { break }
+                gotLine = true
+                skipped += 1
+                if skipped > Self.resyncMax {
+                    record("gave up looking for \(setParam) after \(skipped) other lines")
+                    response = nil
+                    break
+                }
+                read = await nextLine(after: line, timeout: timeout, skipEcho: echoPending)
+                if read.skippedEcho { echoPending = false }
+                response = read.line
+            }
+        }
         if let reply = response {
             gotLine = true
             pairs = WireProtocol.parseResponse(model: model, text: reply)
