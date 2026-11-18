@@ -1,5 +1,6 @@
 #!/bin/bash
-# Build CP Remote in release mode, wrap it in a .app bundle and pack it in
+# Build CP Remote in release mode as a universal binary (arm64 and x86_64),
+# wrap it in a .app bundle and pack it in
 # a DMG with an Applications shortcut for drag-and-drop installation. Writes
 # CPRemote-<version>.dmg and an identical CPRemote.dmg (fixed name, for the
 # "latest release" download link).
@@ -24,9 +25,14 @@ out="$(cd "$out" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-(cd "$here" && swift build -c release)
-binary="$here/.build/release/$APP_NAME"
+# A universal binary: Apple silicon and Intel Macs on macOS 14 or later.
+(cd "$here" && swift build -c release --arch arm64 --arch x86_64)
+# Where a multi-arch build lands depends on the SwiftPM version: ask it.
+binary="$(cd "$here" && swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/$APP_NAME"
 [ -x "$binary" ] || { echo "no release binary at $binary" >&2; exit 1; }
+for arch in arm64 x86_64; do
+    lipo "$binary" -verify_arch "$arch" || { echo "the binary lacks $arch" >&2; exit 1; }
+done
 
 app="$work/stage/$APP_NAME.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"

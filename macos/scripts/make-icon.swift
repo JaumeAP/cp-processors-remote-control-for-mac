@@ -56,5 +56,6 @@ try converter.run()
 converter.waitUntilExit()
 guard converter.terminationStatus == 0 else {
     FileHandle.standardError.write(Data("iconutil failed\n".utf8))
+    try? FileManager.default.removeItem(at: iconset)   // exit() skips the defer above
     exit(1)
 }
