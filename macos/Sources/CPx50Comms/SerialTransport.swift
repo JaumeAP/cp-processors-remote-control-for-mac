@@ -291,8 +291,12 @@ func configureRawSerial(_ fd: Int32, baudrate: Int?) {
     mode.c_iflag &= ~flags([IGNBRK, BRKINT, IGNPAR, PARMRK, INPCK, ISTRIP, INLCR, IGNCR, ICRNL,
                             IXON, IXANY, IXOFF])
     mode.c_oflag &= ~flags([OPOST])
-    mode.c_cflag &= ~flags([PARENB, CSIZE])
-    mode.c_cflag |= flags([CS8])
+    // 8N1 with no hardware flow control, as the processors' manuals give it
+    // (9600 baud, no parity, one stop bit), whatever an earlier user of the
+    // port left set; CLOCAL so a three-wire cable's absent modem lines
+    // neither block writes nor read as a hang-up, CREAD so input is received.
+    mode.c_cflag &= ~flags([PARENB, CSIZE, CSTOPB, CRTSCTS])
+    mode.c_cflag |= flags([CS8, CLOCAL, CREAD])
     mode.c_lflag &= ~(flags([ECHO, ECHOE, ECHOK, ECHONL, ICANON, IEXTEN, ISIG, TOSTOP])
                       | tcflag_t(truncatingIfNeeded: NOFLSH))
     withUnsafeMutableBytes(of: &mode.c_cc) { cc in

@@ -112,11 +112,17 @@ struct CP750Panel: View {
                 g.label("Input Select", 0.763, 0.86, size: 0.06, width: 0.2, color: Color(white: 0.3))
                 let inputs = ["Digital\n1", "Digital\n2", "Digital\n3", "Digital\n4", "Multi-Ch\nAnalog", "\nNonSync", "\nMic"]
                 let inputX: [CGFloat] = [0.643, 0.685, 0.722, 0.763, 0.802, 0.843, 0.883]
+                let inputNames = ["Digital 1", "Digital 2", "Digital 3", "Digital 4", "Multi-Ch Analog",
+                                  "NonSync", "Mic"]
                 ForEach(0..<7, id: \.self) { index in
-                    g.put(inputX[index], 0.5, Key(diameter: g.h * 0.133, lit: model.formatButton == index + 1 ? .white : nil,
-                                                 enabled: model.isConnected) { model.pressButton(index + 1) })
+                    let selected = model.formatButton == index + 1
+                    g.put(inputX[index], 0.5, Key(diameter: g.h * 0.133, lit: selected ? .white : nil,
+                                                 enabled: model.isConnected) { model.pressButton(index + 1) }
+                        .accessibilityLabel("Input \(inputNames[index])")
+                        .accessibilityAddTraits(selected ? .isSelected : []))
                     g.label(inputs[index], inputX[index], 0.31, size: 0.05, width: 0.038,
                             weight: .bold, color: Color(white: 0.2))
+                        .accessibilityHidden(true)
                 }
                 // The four Valid lamps under the inputs (no wire command here).
                 ForEach(0..<4, id: \.self) { index in
@@ -127,7 +133,8 @@ struct CP750Panel: View {
                 g.disc(0.19, 0.68, 0.122, fill: keyCap)
                 g.put(0.39, 0.68, Key(diameter: g.h * 0.122,
                                       lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
-                                      enabled: model.isConnected) { model.toggleMute() })
+                                      enabled: model.isConnected) { model.toggleMute() }
+                    .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
                 g.rect(0.55, 0.69, 0.025, 0.12, fill: Color(white: 0.25), radius: 2)
                 // The display: the fader level, as the unit shows it.
                 g.disc(0.28, 0.53, 0.72, fill: frontDark)
@@ -327,7 +334,8 @@ struct CP950Panel: View {
                         .foregroundStyle(model.muted ? Color.red : Color(white: 0.85))
                 }
                 .buttonStyle(.plain)
-                .disabled(!model.isConnected))
+                .disabled(!model.isConnected)
+                .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
                 // The vertical status LEDs (no wire command here): green, as in the photo.
                 g.rect(0.66, 0.5, 0.005, 0.72, fill: Color(red: 0.2, green: 0.8, blue: 0.3), radius: 1)
                 // The booth monitor volume knob and its speaker grille (no wire command here).

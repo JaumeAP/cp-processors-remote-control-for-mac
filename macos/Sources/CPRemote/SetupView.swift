@@ -1,5 +1,5 @@
-// The Setup sheet: the processor's IP address and a Test button that opens
-// a short separate link to it and reports whether a CP650 answered.
+// The Setup sheet: the processor model and IP address, and a Test button
+// that reports whether the processor chosen here answered at that address.
 
 import CPx50Comms
 import SwiftUI
@@ -55,7 +55,8 @@ struct SetupView: View {
         form.testing = true
         form.testResult = "Testing…"
         Task {
-            form.testResult = await model.test(address: form.draft)
+            // The model picked in this sheet, saved or not.
+            form.testResult = await model.test(address: form.draft, model: form.choice)
             form.testing = false
             // SwiftUI on macOS has no live region: say the result.
             AccessibilityNotification.Announcement(form.testResult).post()

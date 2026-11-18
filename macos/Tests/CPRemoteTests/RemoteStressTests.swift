@@ -455,6 +455,35 @@ struct RemoteStressTests {
         #expect(await model.test(address: "   ") == "Type an IP address first.")
     }
 
+    /// Test in Setup asks as the model picked in the sheet, before it is
+    /// saved, and names that model in its result.
+    @Test func setupTestUsesTheModelPickedInTheSheet() async throws {
+        let sim = try await Simulator(model: .cp750)
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        model.choose(.cp650)                                   // the saved model
+        let picked = await model.test(address: "127.0.0.1", model: .cp750)
+        #expect(picked == "OK: the CP750 at 127.0.0.1 answered, fader 7.0.", "\(picked)")
+        let saved = await model.test(address: "127.0.0.1")      // CP650 framing to a CP750
+        #expect(!saved.hasPrefix("OK"), "\(saved)")
+    }
+
+    /// A key the front does not have selects nothing and sends nothing.
+    @Test func aKeyOutsideTheFrontSelectsNothing() async throws {
+        let sim = try await Simulator(model: .cp750)
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.formatButton != nil })
+        let before = model.formatButton                        // analog, the fifth key
+        model.pressButton(8)                                   // the CP750 has seven inputs
+        model.pressButton(0)
+        #expect(model.formatButton == before)
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(await probe(sim, "cp750.sys.input_mode") == "analog")
+        await model.disconnect()
+    }
+
     /// 20 s of mixed use, one action every 2 ms (knob turns, format presses,
     /// mute toggles) while polling runs and the link is cut every 3 s. At the
     /// end the processor holds exactly what the panel shows.
