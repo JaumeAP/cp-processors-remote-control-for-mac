@@ -531,7 +531,9 @@ final class RemoteModel: ObservableObject {
             // unreachable at connect time is found when it comes up.
             note("link is down: reconnecting")
             markUnread("link is down")
-            let ok = await cp.reconnect()
+            // connect(), not reconnect(): a link another path reopened
+            // meanwhile is kept, not closed and opened again.
+            let ok = await cp.connect()
             note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
             formatListDue = true
