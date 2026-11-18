@@ -45,6 +45,56 @@ private actor ScriptedTransport: LineTransport {
     }
 }
 
+/// A CP650 that answers `KEY?` only, late: the reply to the first form lands
+/// while the retry in the other form waits, and is read as its answer.
+private actor LateTransport: LineTransport {
+    private var pending: [String] = []
+    private var connected = false
+    private(set) var sent: [String] = []
+
+    func isConnected() -> Bool { connected }
+    func peerClosed() -> Bool { false }
+    func connect() async -> Bool {
+        connected = true
+        return true
+    }
+    func sendLine(_ line: String) async throws {
+        sent.append(line)
+        guard line.hasSuffix("?"), !line.hasSuffix("=?") else { return }   // KEY=? is never answered
+        let key = String(line.dropLast())
+        Task {
+            try? await Task.sleep(for: .milliseconds(150))                  // after the 0.1 s timeout
+            self.arrive("\(key)=1")
+        }
+    }
+    private func arrive(_ line: String) { pending.append(line) }
+    func readLine(timeout: Double) async -> String? {
+        let deadline = ContinuousClock.now + .seconds(timeout)
+        while ContinuousClock.now < deadline {
+            if !pending.isEmpty { return pending.removeFirst() }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return nil
+    }
+    func close() { connected = false }
+}
+
+@Suite struct DolbyCPQueryFormTests {
+    /// One late reply to `KEY?`, read as the answer to the `KEY=?` retry,
+    /// used to switch every later query to `KEY=?`, which this unit ignores.
+    @Test func aLateReplyDoesNotSwitchTheQueryForm() async throws {
+        let transport = LateTransport()
+        let cp = DolbyCP(transport: transport, model: .cp650, getRetries: 1, gap: 0)
+        #expect(await cp.connect())
+        #expect(try await cp.get("mute", timeout: 0.1) == "1")              // answered late
+        try await Task.sleep(for: .milliseconds(200))
+        let before = await transport.sent.count
+        _ = try await cp.get("fader_level", timeout: 0.3)
+        #expect(await transport.sent.dropFirst(before).first == "fader_level?", "the form was switched")
+        await cp.disconnect()
+    }
+}
+
 /// A CP650 SET skips a stray line to its own reply: taken as the reply, the
 /// stray line left each later SET's echo and reply behind, and the next fader
 /// read got an old level.

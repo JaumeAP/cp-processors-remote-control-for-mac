@@ -31,8 +31,9 @@ struct EventLogTests {
         }
     }
 
-    /// A CP650 that answers only `KEY=?`: the first query falls back to it on
-    /// its retry, and every later query is sent that way from the start.
+    /// A CP650 that answers only `KEY=?`: each query falls back to it on its
+    /// retry; after two queries left unanswered in the preferred form, every
+    /// later query is sent that way from the start.
     @Test func aCP650ThatAnswersOnlyTheEqualsFormIsLearned() async throws {
         let sim = try await Simulator(extraArguments: ["--query-form", "equals", "--log"])
         defer { sim.stop() }
@@ -41,10 +42,12 @@ struct EventLogTests {
         await cp.setEventLog { events.add($0) }
         #expect(await cp.connect())
         #expect(try await cp.get("fader_level", timeout: 0.3) == "70")
-        #expect(events.lines.contains("queries are sent as fader_level=? from now on"))
-        let before = sim.received().count
+        #expect(!events.lines.contains { $0.hasPrefix("queries are sent as") }, "one miss must not switch")
         #expect(try await cp.get("mute", timeout: 0.3) == "0")
-        #expect(Array(sim.received().dropFirst(before)) == ["mute=?"])
+        #expect(events.lines.contains("queries are sent as mute=? from now on"))
+        let before = sim.received().count
+        #expect(try await cp.get("format_button", timeout: 0.3) == "0")
+        #expect(Array(sim.received().dropFirst(before)) == ["format_button=?"])
         await cp.disconnect()
     }
 

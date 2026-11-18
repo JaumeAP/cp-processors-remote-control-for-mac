@@ -15,3 +15,11 @@ public protocol LineTransport: Sendable {
     /// Close the link (idempotent).
     func close() async
 }
+
+/// An error a `sendLine` can throw that may say the write timed out: part or
+/// all of the line may then be on the wire, so `DolbyCP` does not send the
+/// SET again. Any transport's failure type can adopt it.
+public protocol TransportFailure: Error {
+    /// The write timed out (the bytes may have gone out).
+    var isWriteTimeout: Bool { get }
+}

@@ -40,6 +40,9 @@ private actor CountingTransport: LineTransport {
 /// (H1, H3): overlapping lifecycle calls must not leave background tasks
 /// running, and nothing may reopen the link after `disconnect()`.
 @Suite struct DolbyCPLifecycleTests {
+    /// Two overlapping connects run one pair of background tasks, and
+    /// disconnect ends it. Without the lifecycle gate both connects started
+    /// a pair, and the orphaned one outlived disconnect().
     @Test func overlappingConnectsLeaveNoOrphanedWatchdog() async throws {
         let transport = CountingTransport()
         let cp = DolbyCP(transport: transport, model: .cp850, pollInterval: 0.02,
@@ -47,7 +50,12 @@ private actor CountingTransport: LineTransport {
         async let first = cp.connect()
         async let second = cp.connect()
         _ = await (first, second)
+        #expect(await eventually { await cp.backgroundTasks == 2 }, "one drain and one watchdog")
+        try await Task.sleep(for: .milliseconds(100))
+        let running = await cp.backgroundTasks
+        #expect(running == 2, "\(running) background tasks for one link")
         await cp.disconnect()
+        #expect(await cp.backgroundTasks == 0, "a task outlived disconnect()")
         let before = await transport.connects
         await transport.fail()
         try await Task.sleep(for: .milliseconds(300))   // many watchdog ticks
@@ -70,5 +78,19 @@ private actor CountingTransport: LineTransport {
         try await Task.sleep(for: .milliseconds(300))
         #expect(await transport.connects == before, "the cancelled watchdog reconnected")
         #expect(await !cp.isLinkUp)
+    }
+
+    /// An idle link makes no drain passes: the drain task used to wake every
+    /// 10 ms for the whole connection.
+    @Test func theDrainTaskSleepsWhileNothingIsQueued() async throws {
+        let transport = CountingTransport()
+        let cp = DolbyCP(transport: transport, model: .cp850, pollInterval: 10, gap: 0)
+        #expect(await cp.connect())
+        try await Task.sleep(for: .milliseconds(100))
+        let before = await cp.drainPasses
+        try await Task.sleep(for: .seconds(1))
+        let passes = await cp.drainPasses - before
+        #expect(passes <= 2, "\(passes) drain passes in one idle second")
+        await cp.disconnect()
     }
 }

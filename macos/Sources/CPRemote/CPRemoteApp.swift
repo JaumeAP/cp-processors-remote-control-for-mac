@@ -28,6 +28,12 @@ struct CPRemoteApp: App {
             NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
             NSWindow.didChangeOcclusionStateNotification, NSWindow.willMoveNotification,
         ]
+        // At quit, the lines still queued would be lost: write them first.
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                               object: nil, queue: .main) { _ in
+            log.write("quit")
+            log.flush()
+        }
         for name in names {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { notification in
                 var detail = ""

@@ -7,7 +7,8 @@
 /// 2. `get` is the one blocking call: it waits its turn, retries a lost or
 ///    timed-out query, and skips stale lines that do not name the param.
 ///    On a model with two query forms (the CP650), each retry uses the next
-///    form, and the form that was answered is used from then on.
+///    form; once the preferred form has gone unanswered twice in a row and
+///    the other is answered, the other is used from then on.
 /// 3. Every exchange updates the status: a parsed reply or `ACK` → ok, no
 ///    line at all → missing; a line that does not parse leaves it as it is.
 /// 4. A SET counts as applied when its reply does not parse at all, or names
@@ -36,8 +37,6 @@ public actor DolbyCP {
     private let transport: any LineTransport
     private var state = ProcessorState()
     private var queue = CommandQueue()
-    public private(set) var droppedCommands = 0
-    public private(set) var lastDropError: String?
 
     private let statusContinuation: AsyncStream<ProcessorStatus>.Continuation
     private var drainTask: Task<Void, Never>?
@@ -49,8 +48,26 @@ public actor DolbyCP {
     private var eventLog: (@Sendable (String) -> Void)?
     private var turnQueue: [CheckedContinuation<Void, Never>] = []
     /// The index, in `WireProtocol.queryForms`, of the query form to send:
-    /// the one the processor last answered.
+    /// the one the processor answers.
     private var queryForm = 0
+    /// Queries in the preferred form left unanswered in a row. The form is
+    /// switched only once it reaches `formMissLimit` and the other form is
+    /// answered: one late reply to the preferred form, read as the answer to
+    /// the other, must not switch it.
+    private var formMisses = 0
+    private static let formMissLimit = 2
+
+    /// A query in `form` was answered (`answered`) or not: keep or switch
+    /// the preferred form.
+    private func noteQuery(form: Int, answered: Bool, line: String) {
+        if form == queryForm {
+            formMisses = answered ? 0 : formMisses + 1
+        } else if answered, formMisses >= Self.formMissLimit {
+            queryForm = form
+            formMisses = 0
+            record("queries are sent as \(line) from now on")
+        }
+    }
 
     /// A client over TCP to `host`, on `port` or the model's default port.
     public init(host: String, port: UInt16? = nil, model: ProcessorModel = .cp750,
@@ -251,6 +268,7 @@ public actor DolbyCP {
         _ = try WireProtocol.formatSet(model: model, param: param, value: value)
         if !(await linkUp()), !autoReconnect { return false }
         queue.enqueue(PendingSet(param: param, value: value, timeout: ProtocolTiming.clamped(timeout)))
+        signalWork()
         return true
     }
 
@@ -271,13 +289,12 @@ public actor DolbyCP {
             await acquire()
             let response = await transact(line, timeout: timeout, expect: param).response
             release()
-            if let response,
-               let pair = WireProtocol.parseResponse(model: model, text: response)
-                .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") }) {
-                if form != queryForm {
-                    queryForm = form
-                    record("queries are sent as \(line) from now on")
-                }
+            let pair = response.flatMap { reply in
+                WireProtocol.parseResponse(model: model, text: reply)
+                    .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") })
+            }
+            if forms.count > 1 { noteQuery(form: form, answered: pair != nil, line: line) }
+            if let pair {
                 state.set(param, .string(pair.value))
                 return pair.value
             }
@@ -350,31 +367,69 @@ public actor DolbyCP {
         return queue.isEmpty && !queue.hasInflight && !busy
     }
 
-    /// Queue a SET without the framing check, for tests of the drop path.
-    func enqueueUnchecked(_ command: PendingSet) {
-        queue.enqueue(command)
-    }
-
     // MARK: - Background tasks
+
+    /// Drain and watchdog tasks running now (for tests: one pair at most).
+    private(set) var backgroundTasks = 0
+    /// Drain passes made so far (for tests: an idle link makes none).
+    private(set) var drainPasses = 0
+    /// The drain task waiting for work, resumed by `set` or a reopen.
+    private var workWaiter: CheckedContinuation<Void, Never>?
 
     private func startBackground() {
         drainTask?.cancel()      // never leave an earlier pair running
         watchdogTask?.cancel()
         let interval = pollInterval
         drainTask = Task { [weak self] in
+            await self?.taskStarted()
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.drainStep()
-                try? await Task.sleep(for: .milliseconds(10))
+                // Idle (nothing queued) it waits for `set` to wake it; with
+                // SETs queued (the link down, say) it looks again in 10 ms.
+                if await self.hasNoWork() {
+                    await self.waitForWork()
+                } else {
+                    try? await Task.sleep(for: .milliseconds(10))
+                }
             }
+            await self?.taskEnded()
         }
         watchdogTask = Task { [weak self] in
+            await self?.taskStarted()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled, let self else { break }
                 await self.watchdogTick()
             }
+            await self?.taskEnded()
         }
+    }
+
+    private func taskStarted() { backgroundTasks += 1 }
+    private func taskEnded() { backgroundTasks -= 1 }
+
+    private func hasNoWork() -> Bool { queue.isEmpty }
+
+    /// Suspend the drain task until `signalWork` (a SET queued, a link
+    /// reopened, the task cancelled).
+    private func waitForWork() async {
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled || !queue.isEmpty {
+                    continuation.resume()
+                } else {
+                    workWaiter = continuation
+                }
+            }
+        } onCancel: {
+            Task { await self.signalWork() }
+        }
+    }
+
+    private func signalWork() {
+        workWaiter?.resume()
+        workWaiter = nil
     }
 
     /// Cancel the drain and watchdog tasks and wait for both to end. Swift
@@ -390,17 +445,14 @@ public actor DolbyCP {
     /// One drain pass: send the head of the queue if the link is up. The
     /// command leaves the queue only once the lock is held.
     private func drainStep() async {
+        drainPasses += 1
         guard !queue.isEmpty, await linkUp() else { return }
         await acquire()
         defer { release() }
         guard !Task.isCancelled, await linkUp(), let command = queue.dequeue() else { return }
-        let line: String
-        do {
-            line = try WireProtocol.formatSet(model: model, param: command.param, value: command.value)
-        } catch {
-            drop(command, error)
-            return
-        }
+        // `set` framed it before queueing it, so this cannot fail.
+        guard let line = try? WireProtocol.formatSet(model: model, param: command.param, value: command.value)
+        else { return }
         queue.setInflight(command)
         let outcome = await transact(line, timeout: command.timeout, expect: nil, setParam: command.param)
         if confirmsSet(outcome.response, command.param) {
@@ -408,11 +460,6 @@ public actor DolbyCP {
         }
         queue.clearInflight()
         if !outcome.reachedWire { queue.requeueFront(command) }
-    }
-
-    private func drop(_ command: PendingSet, _ error: ProtocolError) {
-        droppedCommands += 1
-        lastDropError = "\(command.param.debugDescription): \(error)"
     }
 
     private func watchdogTick() async {
@@ -444,13 +491,12 @@ public actor DolbyCP {
             }
             let response = await transact(forms[form], timeout: ProtocolTiming.queryTimeout, expect: param).response
             release()
-            guard let response,
-                  let pair = WireProtocol.parseResponse(model: model, text: response)
-                    .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") }) else { continue }
-            if form != queryForm {
-                queryForm = form
-                record("queries are sent as \(forms[form]) from now on")
+            let pair = response.flatMap { reply in
+                WireProtocol.parseResponse(model: model, text: reply)
+                    .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") })
             }
+            if forms.count > 1 { noteQuery(form: form, answered: pair != nil, line: forms[form]) }
+            guard let pair else { continue }
             state.set(param, .string(pair.value))
             return
         }
@@ -662,10 +708,9 @@ public actor DolbyCP {
         release()
     }
 
+    /// Any transport's failure that says its write timed out (`TransportFailure`).
     private static func isWriteTimeout(_ error: any Error) -> Bool {
-        if let failure = error as? TCPTransport.Failure, case .writeTimedOut = failure { return true }
-        if let failure = error as? SerialTransport.Failure, case .writeTimedOut = failure { return true }
-        return false
+        (error as? any TransportFailure)?.isWriteTimeout == true
     }
 
     private func acquire() async {
