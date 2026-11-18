@@ -10,6 +10,7 @@ import CPx50Comms
 import Foundation
 import SwiftUI
 import Testing
+import Vision
 @testable import CPRemote
 
 // MARK: - Simulator
@@ -1108,6 +1109,38 @@ private func patch(_ bitmap: NSBitmapImageRep, _ fx: CGFloat, _ fy: CGFloat, rad
     return result
 }
 
+/// The text on a rendered front, read back with Vision's text recognition
+/// (the displays as a viewer sees them), upper-cased and without spaces.
+@MainActor
+private func screenText(_ model: RemoteModel) throws -> String {
+    let bitmap = try renderFront(model, width: 3600)
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = false
+    try VNImageRequestHandler(cgImage: try #require(bitmap.cgImage)).perform([request])
+    let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+    return lines.joined(separator: "|").uppercased().filter { !$0.isWhitespace }
+}
+
+/// True when the front shows every one of `texts` (case and spaces ignored).
+@MainActor
+private func shows(_ model: RemoteModel, _ texts: String...) async throws -> Bool {
+    // A reply may still be on its way to the panel: read it again for a while.
+    var read = ""
+    for _ in 0..<20 {
+        read = try screenText(model)
+        if texts.allSatisfy({ read.contains($0.uppercased().filter { !$0.isWhitespace }) }) { return true }
+        try await Task.sleep(for: .milliseconds(250))
+    }
+    print("front text: \(read)\nexpected: \(texts)")
+    // CPREMOTE_RENDER_DIR keeps the front that failed, to look at it by eye.
+    if let folder = ProcessInfo.processInfo.environment["CPREMOTE_RENDER_DIR"], !folder.isEmpty,
+       let png = try renderFront(model).representation(using: .png, properties: [:]) {
+        try png.write(to: URL(fileURLWithPath: folder).appendingPathComponent("failed-\(model.processorModel.rawValue).png"))
+    }
+    return false
+}
+
 /// The one key of `keys` (centres as fractions) that `isLit` picks out, or
 /// nil when none or more than one does.
 private func litKey(_ bitmap: NSBitmapImageRep, _ keys: [(CGFloat, CGFloat)],
@@ -1143,11 +1176,18 @@ struct PanelVerificationTests {
         #expect(model.currentFormat.flatMap { RemoteModel.formatNames[$0] } == "Dolby SR")
         let white = { (p: Patch) in p.mean > 0.9 }
         #expect(litKey(try renderFront(model), Self.cp650Keys, white) == 3)
+        #expect(try await shows(model, "Format 05", "Dolby SR", "4.5"))      // LCD and level display
 
         model.pressButton(6)
         #expect(await eventually(10) { await probe(sim, "format_button") == "5" })
         #expect(model.currentFormat == "94")
         #expect(litKey(try renderFront(model), Self.cp650Keys, white) == 6)
+        #expect(try await shows(model, "Format 94"))
+        model.toggleLevelUnit()                                              // 4.5 is -8.3 dB
+        // The display draws "-8.3"; text recognition misses the thin red minus.
+        #expect(model.levelText == "-8.3")
+        #expect(try await shows(model, "8.3"))
+        model.toggleLevelUnit()
         model.toggleMute()
         #expect(await eventually(10) { await probe(sim, "mute") == "0" })
         await model.disconnect()
@@ -1168,10 +1208,12 @@ struct PanelVerificationTests {
         var front = try renderFront(model)
         #expect(litKey(front, keys, white) == 3)
         #expect(patch(front, muteKey.0, muteKey.1).red > 0.3, "mute key not red while muted")
+        #expect(try await shows(model, "Volume 4.5", "Digital 3"))
 
         model.pressButton(6)
         #expect(await eventually(10) { await probe(sim, "cp750.sys.input_mode") == "non_sync" })
         #expect(model.currentInputName == "NonSync")
+        #expect(try await shows(model, "NonSync"))
         model.toggleMute()
         #expect(await eventually(10) { await probe(sim, "cp750.sys.mute") == "0" })
         front = try renderFront(model)
@@ -1196,9 +1238,14 @@ struct PanelVerificationTests {
         var front = try renderFront(model)
         #expect(litKey(front, keys, blue) == 4)
         #expect(patch(front, muteKey.0, muteKey.1).red > 0.1, "mute key not red while muted")
+        #expect(try await shows(model, "Fader: 4.5", "Music", "Macros", "Network"))
 
         model.selectMacro(7)                                               // what key 7 sends
         #expect(await eventually(10) { await probe(sim, "sys.macro_preset") == "7" })
+        #expect(try await shows(model, "BNC 1"))                           // the unit's name for macro 7
+        model.toggleLevelUnit()
+        #expect(try await shows(model, "Fader: -8.3 dB"))
+        model.toggleLevelUnit()
         model.toggleMute()
         #expect(await eventually(10) { await probe(sim, "sys.mute") == "0" })
         front = try renderFront(model)
@@ -1226,6 +1273,7 @@ struct PanelVerificationTests {
         var front = try renderFront(model)
         #expect(litKey(front, rows, white) == 3)                           // macro 4 is third
         #expect(patch(front, muteIcon.0, muteIcon.1, radius: 8).red > 0.1, "mute icon not red while muted")
+        #expect(try await shows(model, "FADER 4.5", "7.1 + Dolby Atmos", "Music", "RCA", "HDMI"))
 
         model.selectMacro(1)
         #expect(await eventually(10) { await probe(sim, "sys.macro_preset") == "1" })
