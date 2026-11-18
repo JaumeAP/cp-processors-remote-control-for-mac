@@ -297,7 +297,10 @@ final class RemoteModel: ObservableObject {
     func selectMacro(_ number: Int) {
         guard let cp = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
         macroPreset = number
-        if let name = macros?.first(where: { $0.number == number })?.name { macroName = name }
+        // The new macro's name from the list; unknown, it is cleared so the
+        // next poll reads it (it would otherwise keep the old macro's name:
+        // the number already matches, so the poll would not ask again).
+        macroName = macros?.first(where: { $0.number == number })?.name
         localChange[Self.macroPresetParam] = .now
         localChange[nameParam] = .now
         Task { _ = try? await cp.set(Self.macroPresetParam, .int(number), timeout: Self.setReplyTimeout) }
