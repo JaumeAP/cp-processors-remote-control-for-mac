@@ -6,9 +6,10 @@
 #
 # Usage: macos/scripts/make-dmg.sh <output-dir>
 #
-# The bundle is ad-hoc signed (no Developer ID, not notarized): on another
-# Mac, Gatekeeper asks to open it with Control-click, Open. Run on the Mac
-# itself: macOS builds are always done locally.
+# The bundle (with the hardened runtime) and the disk image are ad-hoc signed
+# (no Developer ID, not notarized): on another Mac, Gatekeeper warns the first
+# time it opens (on macOS 15 and later, System Settings, Privacy & Security,
+# Open Anyway). Run on the Mac itself: macOS builds are always done locally.
 set -euo pipefail
 
 VERSION="1.0.11"
@@ -52,7 +53,9 @@ cat > "$app/Contents/Info.plist" <<EOF
 </plist>
 EOF
 swift "$here/scripts/make-icon.swift" "$app/Contents/Resources/AppIcon.icns"
-codesign --force --sign - "$app"
+# Ad-hoc signature (no certificate) with the hardened runtime, as DCP-o-matic
+# signs with its Developer ID. A secure timestamp needs a real identity.
+codesign --force --options runtime --sign - "$app"
 codesign --verify --strict "$app"
 
 # The release notes of every version, as a PDF next to the app. The build stops
@@ -63,6 +66,9 @@ ln -s /Applications "$work/stage/Applications"
 dmg="$out/$APP_NAME-$VERSION.dmg"
 rm -f "$dmg"
 hdiutil create -volname "CP Remote $VERSION" -srcfolder "$work/stage" -ov -format UDZO "$dmg" >/dev/null
+# The disk image is signed too (ad hoc), as the app inside it.
+codesign --force --sign - "$dmg"
+codesign --verify --strict "$dmg"
 hdiutil verify "$dmg" >/dev/null
 echo "$dmg"
 
