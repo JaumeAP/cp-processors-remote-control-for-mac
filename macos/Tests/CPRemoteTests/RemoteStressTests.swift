@@ -1067,3 +1067,173 @@ struct QueryFormTests {
         #expect(second.levelInDecibels == true)
     }
 }
+
+// MARK: - Panel verification
+
+/// The colour of a small square of a rendered front, centred at fractions of
+/// its width and height.
+private struct Patch {
+    var mean = 0.0       // mean brightness, 0 to 1
+    var peak = 0.0       // brightest pixel
+    var blue = 0.0       // mean of blue minus red
+    var red = 0.0        // mean of red minus the other two
+}
+
+@MainActor
+private func renderFront(_ model: RemoteModel, width: CGFloat = 1800) throws -> NSBitmapImageRep {
+    let size = CGSize(width: width, height: (width / model.processorModel.aspect).rounded())
+    let renderer = ImageRenderer(content: FrontPanelView(model: model).frame(width: size.width, height: size.height))
+    renderer.scale = 1
+    return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+}
+
+private func patch(_ bitmap: NSBitmapImageRep, _ fx: CGFloat, _ fy: CGFloat, radius: Int = 4) -> Patch {
+    let cx = Int(fx * CGFloat(bitmap.pixelsWide)), cy = Int(fy * CGFloat(bitmap.pixelsHigh))
+    var result = Patch(), count = 0.0
+    for x in (cx - radius)...(cx + radius) {
+        for y in (cy - radius)...(cy + radius) {
+            guard let c = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+            let (r, g, b) = (Double(c.redComponent), Double(c.greenComponent), Double(c.blueComponent))
+            let level = (r + g + b) / 3
+            result.mean += level
+            result.peak = max(result.peak, level)
+            result.blue += b - r
+            result.red += r - (g + b) / 2
+            count += 1
+        }
+    }
+    result.mean /= count
+    result.blue /= count
+    result.red /= count
+    return result
+}
+
+/// The one key of `keys` (centres as fractions) that `isLit` picks out, or
+/// nil when none or more than one does.
+private func litKey(_ bitmap: NSBitmapImageRep, _ keys: [(CGFloat, CGFloat)],
+                    _ isLit: (Patch) -> Bool) -> Int? {
+    let lit = keys.indices.filter { isLit(patch(bitmap, keys[$0].0, keys[$0].1)) }
+    return lit.count == 1 ? lit[0] + 1 : nil
+}
+
+/// Each front against the simulator started with values unlike the defaults:
+/// the panel shows what the unit holds when the link opens (fader, mute, the
+/// selected format, input or macro), the selected key is the one lit at its
+/// place on the drawing, and pressing another key sends its command and
+/// moves the light.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct PanelVerificationTests {
+    /// The CP650's eight format keys, in figure 2-1 units, sampled off their
+    /// silkscreen; a selected key is white.
+    private static let cp650Keys: [(CGFloat, CGFloat)] = (0..<8).map { index in
+        let x = [838.0, 891, 944, 997][index % 4] + 9, y = (index < 4 ? 724.0 : 777) + 9
+        return ((x - 112) / 956, (y - 642) / 280)
+    }
+
+    @Test func cp650() async throws {
+        let sim = try await Simulator(extraArguments: ["--seed", "fader_level=45", "--seed", "format_button=2",
+                                                       "--seed", "mute=1"])
+        defer { sim.stop() }
+        let model = try await connected(sim)
+        #expect(await eventually { model.muted })
+        #expect(model.fader == 4.5 && model.levelText == "4.5")
+        #expect(model.formatButton == 3)                 // wire 2 is the third key
+        #expect(model.currentFormat == "05")             // format_list 01, 04, 05, ...
+        #expect(model.currentFormat.flatMap { RemoteModel.formatNames[$0] } == "Dolby SR")
+        let white = { (p: Patch) in p.mean > 0.9 }
+        #expect(litKey(try renderFront(model), Self.cp650Keys, white) == 3)
+
+        model.pressButton(6)
+        #expect(await eventually(10) { await probe(sim, "format_button") == "5" })
+        #expect(model.currentFormat == "94")
+        #expect(litKey(try renderFront(model), Self.cp650Keys, white) == 6)
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "mute") == "0" })
+        await model.disconnect()
+    }
+
+    @Test func cp750() async throws {
+        let sim = try await Simulator(model: .cp750, extraArguments: [
+            "--seed", "cp750.sys.fader=45", "--seed", "cp750.sys.input_mode=dig_3", "--seed", "cp750.sys.mute=1"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.formatButton != nil && model.muted })
+        #expect(model.fader == 4.5)
+        #expect(model.formatButton == 3 && model.currentInputName == "Digital 3")
+        let keys: [(CGFloat, CGFloat)] = [0.643, 0.685, 0.722, 0.763, 0.802, 0.843, 0.883].map { ($0, 0.5) }
+        let white = { (p: Patch) in p.mean > 0.9 }
+        let muteKey = (CGFloat(0.39), CGFloat(0.68))
+        var front = try renderFront(model)
+        #expect(litKey(front, keys, white) == 3)
+        #expect(patch(front, muteKey.0, muteKey.1).red > 0.3, "mute key not red while muted")
+
+        model.pressButton(6)
+        #expect(await eventually(10) { await probe(sim, "cp750.sys.input_mode") == "non_sync" })
+        #expect(model.currentInputName == "NonSync")
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "cp750.sys.mute") == "0" })
+        front = try renderFront(model)
+        #expect(litKey(front, keys, white) == 6)
+        #expect(patch(front, muteKey.0, muteKey.1).red < 0.1, "mute key still red after unmuting")
+        await model.disconnect()
+    }
+
+    @Test func cp850() async throws {
+        let sim = try await Simulator(model: .cp850, extraArguments: [
+            "--seed", "sys.fader=45", "--seed", "sys.macro_preset=4", "--seed", "sys.macro_name=Music",
+            "--seed", "sys.mute=1"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.macroName != nil && model.muted })
+        #expect(model.fader == 4.5 && model.levelTextWithUnit == "4.5")   // LCD line 1
+        #expect(model.macroPreset == 4 && model.macroName == "Music")       // LCD line 2
+        let keys: [(CGFloat, CGFloat)] = (0..<8).map { (0.648 + 0.0315 * CGFloat($0), 0.49) }
+        let blue = { (p: Patch) in p.blue > 0.2 }
+        let muteKey = (CGFloat(0.262), CGFloat(0.52))
+        var front = try renderFront(model)
+        #expect(litKey(front, keys, blue) == 4)
+        #expect(patch(front, muteKey.0, muteKey.1).red > 0.1, "mute key not red while muted")
+
+        model.selectMacro(7)                                               // what key 7 sends
+        #expect(await eventually(10) { await probe(sim, "sys.macro_preset") == "7" })
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "sys.mute") == "0" })
+        front = try renderFront(model)
+        #expect(litKey(front, keys, blue) == 7)
+        #expect(patch(front, muteKey.0, muteKey.1).red < 0.05, "mute key still red after unmuting")
+        await model.disconnect()
+    }
+
+    @Test func cp950() async throws {
+        let sim = try await Simulator(model: .cp950, extraArguments: [
+            "--seed", "sys.fader=45", "--seed", "sys.macro_preset=4", "--seed", "sys.macro_name=Music",
+            "--seed", "sys.mute=1"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.macros != nil && model.muted })
+        #expect(model.fader == 4.5)
+        #expect(model.macroPreset == 4 && model.macroName == "Music")
+        let order = try #require(model.macros).map(\.number)               // the unit's order
+        #expect(order == [3, 1, 4, 11, 7, 6, 9])
+        // The macro list on the screen: the selected row is white, the others grey.
+        let rows: [(CGFloat, CGFloat)] = order.indices.map { (0.445, 0.45 + 0.042 * CGFloat($0)) }
+        let white = { (p: Patch) in p.peak > 0.9 }
+        let muteIcon = (CGFloat(0.44), CGFloat(0.36))
+        var front = try renderFront(model)
+        #expect(litKey(front, rows, white) == 3)                           // macro 4 is third
+        #expect(patch(front, muteIcon.0, muteIcon.1, radius: 8).red > 0.1, "mute icon not red while muted")
+
+        model.selectMacro(1)
+        #expect(await eventually(10) { await probe(sim, "sys.macro_preset") == "1" })
+        model.toggleMute()
+        #expect(await eventually(10) { await probe(sim, "sys.mute") == "0" })
+        front = try renderFront(model)
+        #expect(litKey(front, rows, white) == 2)                           // macro 1 is second
+        #expect(patch(front, muteIcon.0, muteIcon.1, radius: 8).red < 0.05, "mute icon still red after unmuting")
+        await model.disconnect()
+    }
+}
