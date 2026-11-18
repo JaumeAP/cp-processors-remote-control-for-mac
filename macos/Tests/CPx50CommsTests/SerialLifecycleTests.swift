@@ -65,4 +65,51 @@ struct SerialLifecycleTests {
             await transport.close()
         }
     }
+
+    /// The descriptors this process holds open on `path` (other suites open
+    /// sockets in parallel, so only this device's are counted).
+    private func openDescriptors(on path: String) -> Int {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd")) ?? []
+        return names.compactMap(Int32.init).filter { fd in
+            var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+            guard fcntl(fd, F_GETPATH, &buffer) == 0 else { return false }
+            return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) == path
+        }.count
+    }
+
+    /// close() must close the descriptor: the read source's cancel handler,
+    /// which closes it, used to find the link already released and do
+    /// nothing, leaking one descriptor per close.
+    @Test func closeReleasesTheDescriptor() async throws {
+        let pty = try SLPty()
+        defer { pty.close() }
+        let transport = SerialTransport(device: pty.path)
+        #expect(await transport.connect())
+        await transport.close()
+        try await Task.sleep(for: .milliseconds(100))
+        let before = openDescriptors(on: pty.path)          // the test's own slave descriptor
+        for _ in 0..<50 {
+            #expect(await transport.connect())
+            await transport.close()
+        }
+        try await Task.sleep(for: .milliseconds(300))      // the cancel handlers run on the link's queue
+        let after = openDescriptors(on: pty.path)
+        #expect(after == before, "\(after - before) descriptors left open by 50 connect/close cycles")
+    }
+
+    /// The processors speak 9600 baud; a rate the port cannot take is refused.
+    @Test func theDefaultSpeedIs9600AndAnUnknownRateFailsTheConnect() async throws {
+        let pty = try SLPty()
+        defer { pty.close() }
+        let transport = SerialTransport(device: pty.path)
+        #expect(transport.baudrate == 9600)
+        #expect(await transport.connect())
+        var mode = termios()
+        #expect(tcgetattr(pty.slave, &mode) == 0)
+        #expect(cfgetospeed(&mode) == speed_t(9600), "the port must be set to 9600")
+        await transport.close()
+        for rate in [0, 12345] {
+            #expect(await !SerialTransport(device: pty.path, baudrate: rate).connect(), "rate \(rate)")
+        }
+    }
 }
