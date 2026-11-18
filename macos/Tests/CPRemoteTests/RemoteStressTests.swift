@@ -1077,6 +1077,31 @@ struct BoothSafetyTests {
     }
 }
 
+/// Unanswered macro reads only pause the macro reads; once the unit answers
+/// again, a macro changed on it is shown.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct MacroRecoveryTests {
+    @Test func macroTrackingResumesAfterUnansweredReads() async throws {
+        let sim = try await Simulator(model: .cp850, control: true)
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.macroPreset == 1 })
+        #expect(await sim.command("set ignore sys.macro_preset") == "OK\n")
+        try await Task.sleep(for: .seconds(16))                    // each miss costs ~5 s: two or more
+        #expect(await sim.command("set ignore none") == "OK\n")
+        let other = DolbyCP(host: "127.0.0.1", port: sim.port, model: .cp850, gap: 0.05)
+        #expect(await other.connect())
+        #expect(try await other.set("sys.macro_preset", 4))         // changed on the unit
+        #expect(await other.settle(timeout: 3))
+        await other.disconnect()
+        #expect(await eventually(40) { model.macroPreset == 4 && model.macroName == "Music" },
+                "the macro changed on the unit was never shown")
+        await model.disconnect()
+    }
+}
+
 @MainActor
 @Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
 struct SlowReplyTests {

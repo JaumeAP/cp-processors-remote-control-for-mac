@@ -85,7 +85,13 @@ final class RemoteModel: ObservableObject {
     @Published private(set) var macroPreset: Int?
     /// The macros the processor offers, in its order (CP850 / CP950 / CP950A).
     @Published private(set) var macros: [Macro]?
+    /// Unanswered macro reads in a row; at `macroMissLimit` the macro reads
+    /// pause for `macroPausePolls` polls (each miss costs a read timeout),
+    /// then are tried again. Any answered macro read clears it.
     private var macroMisses = 0
+    private var macroPollsToSkip = 0
+    private static let macroMissLimit = 2
+    private static let macroPausePolls = 5
     /// Reads of the macro list left on this link: it is read until one
     /// succeeds (a stale line before its header fails a read), at most
     /// `macroListTries` times, so a unit without the list is not asked forever.
@@ -393,13 +399,12 @@ final class RemoteModel: ObservableObject {
         processorHost = address
         localChange = [:]
         formatListDue = true
-        macroListTriesLeft = Self.macroListTries
+        resetMacroReads()
         silentPolls = 0
         macroName = nil
         macroNameNumber = nil
         macroPreset = nil
         macros = nil
-        macroMisses = 0
         // A new processor: nothing shown may be the previous unit's.
         muted = false
         formatButton = nil
@@ -427,7 +432,7 @@ final class RemoteModel: ObservableObject {
         message = "Reconnecting to \(trimmedHost)…"
         panelRead = false
         formatListDue = true
-        macroListTriesLeft = Self.macroListTries
+        resetMacroReads()
         _ = await cp.reconnect()
         guard processor === cp else { return }
         apply(status: await cp.status)
@@ -548,9 +553,26 @@ final class RemoteModel: ObservableObject {
             note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
             formatListDue = true
-            macroListTriesLeft = Self.macroListTries
+            resetMacroReads()
         }
         await refresh(cp)
+    }
+
+    /// A new or reopened link: the macro number, name and list are read
+    /// again, whatever went unanswered on the old one.
+    private func resetMacroReads() {
+        macroListTriesLeft = Self.macroListTries
+        macroMisses = 0
+        macroPollsToSkip = 0
+    }
+
+    /// One macro read went unanswered.
+    private func macroReadMissed() {
+        macroMisses += 1
+        guard macroMisses >= Self.macroMissLimit else { return }
+        note("macro reads unanswered: paused for \(Self.macroPausePolls) polls")
+        macroMisses = 0
+        macroPollsToSkip = Self.macroPausePolls
     }
 
     /// A reply to a read that started at `start` may update the panel only
@@ -580,7 +602,7 @@ final class RemoteModel: ObservableObject {
                 note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
                 silentPolls = 0
                 formatListDue = true
-                macroListTriesLeft = Self.macroListTries
+                resetMacroReads()
                 linkReopens += 1
                 _ = await cp.reconnect()
             }
@@ -627,15 +649,17 @@ final class RemoteModel: ObservableObject {
         }
 
         // The selected macro, for the screen: its number every poll, its name
-        // whenever the name shown is not that macro's, the list once per
-        // link. A processor that never answers is given up on after two
-        // unanswered reads (each costs a read timeout); a reply held back
-        // because the macro was just changed here is not a miss.
-        if let nameParam = panel.macroName, macroMisses < 2, isCurrent(cp) {
+        // whenever the name shown is not that macro's, the list until it is
+        // read. Unanswered reads pause these reads for a few polls
+        // (`macroReadMissed`); a reply held back because the macro was just
+        // changed here is not a miss.
+        if panel.macroName != nil, macroPollsToSkip > 0 { macroPollsToSkip -= 1 }
+        if let nameParam = panel.macroName, macroPollsToSkip == 0, isCurrent(cp) {
             start = .now
             let presetReply = try? await cp.get(Self.macroPresetParam)
             guard isCurrent(cp) else { return }
             if let presetReply {
+                macroMisses = 0
                 if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
                    await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp) {
                     macroPreset = number
@@ -650,14 +674,14 @@ final class RemoteModel: ObservableObject {
                                 macroNameNumber = number
                             }
                         } else {
-                            macroMisses += 1
+                            macroReadMissed()
                         }
                     }
                 }
             } else {
-                macroMisses += 1
+                macroReadMissed()
             }
-            if macroListTriesLeft > 0, macroMisses < 2, isCurrent(cp) {
+            if macroListTriesLeft > 0, macroPollsToSkip == 0, isCurrent(cp) {
                 macroListTriesLeft -= 1
                 if let lines = try? await cp.getList(Self.macroListParam), isCurrent(cp) {
                     macroListTriesLeft = 0
