@@ -530,19 +530,41 @@ private final class PointerTracker: ObservableObject {
 private struct WindowAspectLock: NSViewRepresentable {
     let aspect: CGFloat
 
+    /// The aspect last applied to the window; nil before the first.
+    @MainActor final class Coordinator {
+        var appliedAspect: CGFloat?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
-        DispatchQueue.main.async { apply(to: view) }
+        let applied = context.coordinator
+        DispatchQueue.main.async { apply(to: view, applied) }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        // The panel changes shape with the processor model: follow it.
-        DispatchQueue.main.async { apply(to: nsView) }
+        // The panel changes shape with the processor model: follow it. Any
+        // other update (a poll, a fader move) leaves the window alone, so a
+        // size the user chose is kept.
+        let applied = context.coordinator
+        guard applied.appliedAspect != aspect else { return }
+        DispatchQueue.main.async { apply(to: nsView, applied) }
     }
 
-    private func apply(to view: NSView) {
-        guard let window = view.window else { return }
+    private func apply(to view: NSView, _ applied: Coordinator) {
+        // Not in a window yet: the next update tries again.
+        guard let window = view.window, applied.appliedAspect != aspect else { return }
+        let first = applied.appliedAspect == nil
+        applied.appliedAspect = aspect
+        window.contentAspectRatio = NSSize(width: aspect, height: 1)
+        // The window opens at least 1100 wide; on a model change it keeps the
+        // user's width (never below the panel's 900 minimum) and takes the
+        // new shape.
+        let width = max(window.frame.width, first ? 1100 : 900)
+        window.setContentSize(NSSize(width: width, height: width / aspect))
+        guard first else { return }
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
@@ -553,10 +575,5 @@ private struct WindowAspectLock: NSViewRepresentable {
         window.backgroundColor = .clear
         window.hasShadow = true
         window.isMovableByWindowBackground = true
-        window.contentAspectRatio = NSSize(width: aspect, height: 1)
-        if abs(window.frame.width / max(window.frame.height, 1) - aspect) > 0.001 || window.frame.width < 1100 {
-            let width = max(window.frame.width, 1100)
-            window.setContentSize(NSSize(width: width, height: width / aspect))
-        }
     }
 }

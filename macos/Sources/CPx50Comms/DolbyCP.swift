@@ -165,12 +165,18 @@ public actor DolbyCP {
         await enterLifecycle()
         defer { leaveLifecycle() }
         record("disconnect")
+        disconnected = true
         await stopBackground()
         await closeLocked()
         mark(.missing, "disconnect")
     }
 
+    /// Set by `disconnect()`, cleared by `connect()` and `reconnect()`: a
+    /// `get` still running must not reopen a link the caller closed.
+    private var disconnected = false
+
     private func connectUnlocked() async -> Bool {
+        disconnected = false
         await stopBackground()
         let ok = await connectLocked()
         record("connect \(ok ? "succeeded" : "failed")")
@@ -237,7 +243,7 @@ public actor DolbyCP {
             release()
             if let response,
                let pair = WireProtocol.parseResponse(model: model, text: response)
-                .first(where: { sameScalars($0.param, param) }) {
+                .first(where: { sameScalars($0.param, param) && !sameScalars($0.value, "?") }) {
                 if form != queryForm {
                     queryForm = form
                     record("queries are sent as \(line) from now on")
@@ -404,12 +410,12 @@ public actor DolbyCP {
     private func reconnectTransport() async -> Bool {
         await acquire()
         defer { release() }
-        // A watchdog cancelled while it waited for the lock (disconnect)
-        // must not reopen the link.
-        guard !Task.isCancelled else { return false }
+        // A watchdog cancelled while it waited for the lock (disconnect), or
+        // a `get` from any task after `disconnect()`, must not reopen the link.
+        guard !Task.isCancelled, !disconnected else { return false }
         await transport.close()
         await pauseBeforeReopen()
-        guard !Task.isCancelled else { return false }
+        guard !Task.isCancelled, !disconnected else { return false }
         let ok = await transport.connect()
         record("reconnect \(ok ? "succeeded" : "failed")")
         mark(ok ? .ok : .missing, "reconnect")
@@ -459,31 +465,37 @@ public actor DolbyCP {
             return (nil, Self.isWriteTimeout(error))
         }
         try? await Task.sleep(for: .seconds(gap))
-        response = await readLogged(timeout: timeout)
-        if model == .cp650, let echo = response, sameScalars(echo, line) {
-            response = await readLogged(timeout: timeout)   // the CP650 echo
-        }
+        var echoPending = model == .cp650
+        var read = await nextLine(after: line, timeout: timeout, skipEcho: echoPending)
+        if read.skippedEcho { gotLine = true; echoPending = false }
+        response = read.line
         var pairs: [ResponsePair] = []
         if let reply = response {
             gotLine = true
             pairs = WireProtocol.parseResponse(model: model, text: reply)
-            parsedOk = !pairs.isEmpty || CP650Ack.isAck(reply)
+            // A SET is answered by any line that parses, or an ACK; a query
+            // only by the line that answers it (below).
+            parsedOk = expect == nil && (!pairs.isEmpty || CP650Ack.isAck(reply))
         }
         if let expect, response != nil {
             var skipped = 0
-            while !pairs.contains(where: { sameScalars($0.param, expect) }) {
+            while !Self.answers(pairs, expect) {
                 if skipped >= Self.resyncMax {
                     record("gave up looking for \(expect) after \(skipped) other lines")
                     response = nil
                     break
                 }
-                response = await readLogged(timeout: timeout)
+                read = await nextLine(after: line, timeout: timeout, skipEcho: echoPending)
+                if read.skippedEcho { gotLine = true; echoPending = false }
+                response = read.line
                 guard let reply = response else { break }
                 gotLine = true
                 skipped += 1
                 pairs = WireProtocol.parseResponse(model: model, text: reply)
-                if !pairs.isEmpty || CP650Ack.isAck(reply) { parsedOk = true }
             }
+            // Only the reply itself shows the processor is answering: stale
+            // or unsolicited lines skipped on the way do not.
+            parsedOk = response != nil && Self.answers(pairs, expect)
         }
         if parsedOk {
             mark(.ok)
@@ -492,6 +504,24 @@ public actor DolbyCP {
             mark(.missing, "no reply to \(line) within \(timeout) s")
         }
         return (response, true)
+    }
+
+    /// The next line read, past the CP650's one echo of `sent` when
+    /// `skipEcho` (the echo can follow a stale line too, and a `KEY=?` echoed
+    /// would otherwise parse as the pair KEY, "?"). Only one echo is skipped
+    /// per exchange: the CP650's reply to a SET is the same text as its echo.
+    private func nextLine(after sent: String, timeout: Double, skipEcho: Bool) async
+        -> (line: String?, skippedEcho: Bool)
+    {
+        let read = await readLogged(timeout: timeout)
+        guard skipEcho, let read, sameScalars(read, sent) else { return (read, false) }
+        return (await readLogged(timeout: timeout), true)
+    }
+
+    /// A pair that answers the query for `param`: it names the param and
+    /// carries a value, not a "?".
+    private static func answers(_ pairs: [ResponsePair], _ param: String) -> Bool {
+        pairs.contains { sameScalars($0.param, param) && !sameScalars($0.value, "?") }
     }
 
     /// The query line for `param` in the form the processor last answered.

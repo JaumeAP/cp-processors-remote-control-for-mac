@@ -86,7 +86,11 @@ final class RemoteModel: ObservableObject {
     /// The macros the processor offers, in its order (CP850 / CP950 / CP950A).
     @Published private(set) var macros: [Macro]?
     private var macroMisses = 0
-    private var macroListDue = true
+    /// Reads of the macro list left on this link: it is read until one
+    /// succeeds (a stale line before its header fails a read), at most
+    /// `macroListTries` times, so a unit without the list is not asked forever.
+    private var macroListTriesLeft = RemoteModel.macroListTries
+    private static let macroListTries = 3
     /// The macro number `macroName` belongs to; nil when no name is known.
     private var macroNameNumber: Int?
 
@@ -178,19 +182,21 @@ final class RemoteModel: ObservableObject {
 
     func disconnect() async { await serialized { await self.disconnectNow() } }
 
-    /// Check the processor at `address`. When the main link is up to that
-    /// address, ask over it (the CP650 serves one control client); otherwise
-    /// open a short-lived second link.
-    func test(address raw: String) async -> String {
+    /// Check the processor at `address`, as `chosen` (the model picked in
+    /// Setup, not yet saved; the saved one when nil). When the main link is up
+    /// to that address and model, ask over it (the CP650 serves one control
+    /// client); otherwise open a short-lived second link.
+    func test(address raw: String, model chosen: ProcessorModel? = nil) async -> String {
         let address = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !address.isEmpty else { return "Type an IP address first." }
-        let model = processorModel
+        let model = chosen ?? processorModel
+        let name = Self.choiceName(model)
         let port = self.port ?? model.defaultPort
         if let cp = processor, processorHost == address, status == .ok, cp.model == model {
             guard let level = Self.faderLevel(try? await cp.get(model.panel.fader)) else {
                 return "Connected to \(address), but no fader reply."
             }
-            return "OK: the connected CP650 at \(address) answered, fader \(Self.faderText(level))."
+            return "OK: the connected \(name) at \(address) answered, fader \(Self.faderText(level))."
         }
         let cp = DolbyCP(host: address, port: port, model: model)
         guard await cp.connect() else {
@@ -202,7 +208,7 @@ final class RemoteModel: ObservableObject {
         guard let level = Self.faderLevel(reply) else {
             return "Connected to \(address):\(port), but no fader reply."
         }
-        return "OK: the CP650 at \(address) answered, fader \(Self.faderText(level))."
+        return "OK: the \(name) at \(address) answered, fader \(Self.faderText(level))."
     }
 
     // MARK: - Controls
@@ -246,9 +252,12 @@ final class RemoteModel: ObservableObject {
     /// the CP750's input buttons (`cp750.sys.input_mode`).
     func pressButton(_ button: Int) {
         guard let cp = processor, isConnected else { return }
+        // A key the front does not have selects nothing: CP750 inputs 1 to 7,
+        // CP650 formats 1 to 8.
+        let keys = processorModel.panel.inputs?.count ?? RemoteModel.buttonSilkscreen.count
+        guard (1...keys).contains(button) else { return }
         formatButton = button
         if let inputs = processorModel.panel.inputs {
-            guard inputs.indices.contains(button - 1) else { return }
             localChange[Self.inputParam] = .now
             let value = inputs[button - 1]
             Task { _ = try? await cp.set(Self.inputParam, .string(value), timeout: Self.setReplyTimeout) }
@@ -381,7 +390,7 @@ final class RemoteModel: ObservableObject {
         processorHost = address
         localChange = [:]
         formatListDue = true
-        macroListDue = true
+        macroListTriesLeft = Self.macroListTries
         silentPolls = 0
         macroName = nil
         macroNameNumber = nil
@@ -411,7 +420,7 @@ final class RemoteModel: ObservableObject {
         message = "Reconnecting to \(trimmedHost)…"
         panelRead = false
         formatListDue = true
-        macroListDue = true
+        macroListTriesLeft = Self.macroListTries
         _ = await cp.reconnect()
         guard processor === cp else { return }
         apply(status: await cp.status)
@@ -526,7 +535,7 @@ final class RemoteModel: ObservableObject {
             note("reconnect \(ok ? "succeeded" : "failed")")
             guard isCurrent(cp), ok else { return }
             formatListDue = true
-            macroListDue = true
+            macroListTriesLeft = Self.macroListTries
         }
         await refresh(cp)
     }
@@ -558,7 +567,7 @@ final class RemoteModel: ObservableObject {
                 note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
                 silentPolls = 0
                 formatListDue = true
-                macroListDue = true
+                macroListTriesLeft = Self.macroListTries
                 linkReopens += 1
                 _ = await cp.reconnect()
             }
@@ -632,9 +641,10 @@ final class RemoteModel: ObservableObject {
             } else {
                 macroMisses += 1
             }
-            if macroListDue, macroMisses < 2, isCurrent(cp) {
-                macroListDue = false
+            if macroListTriesLeft > 0, macroMisses < 2, isCurrent(cp) {
+                macroListTriesLeft -= 1
                 if let lines = try? await cp.getList(Self.macroListParam), isCurrent(cp) {
+                    macroListTriesLeft = 0
                     let parsed: [Macro] = lines.compactMap { line in
                         guard let colon = line.firstIndex(of: ":"),
                               let number = Int(line[..<colon].trimmingCharacters(in: .whitespaces)) else { return nil }
