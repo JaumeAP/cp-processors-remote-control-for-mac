@@ -17,6 +17,19 @@ public enum ProtocolTiming {
     public static let writeTimeout: Double = 2.0
     /// Longest closing a link may take.
     public static let closeTimeout: Double = 1.0
+    /// The longest any wait may be: a day stands for "wait forever".
+    public static let longestWait: Double = 86_400
+
+    /// A time in seconds made safe to wait for: NaN and negatives become
+    /// `floor`, infinities and anything past `longestWait` become
+    /// `longestWait`. (`Duration.seconds` traps on an infinite or huge value.)
+    static func clamped(_ seconds: Double, floor: Double = 0) -> Double {
+        guard !seconds.isNaN else { return floor }
+        return min(max(seconds, floor), longestWait)
+    }
+
+    /// A retry count made safe for a range: 0 to 100.
+    static func clampedRetries(_ count: Int) -> Int { min(max(count, 0), 100) }
 }
 
 extension ProcessorModel {

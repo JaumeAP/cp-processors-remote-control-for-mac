@@ -95,14 +95,17 @@ public actor DolbyCP {
         self.transport = transport
         self.port = port
         self.model = model
-        self.pollInterval = pollInterval
+        // Every time and count is made safe here: an infinite, negative or
+        // NaN value used to trap in Duration.seconds or a Range.
+        self.pollInterval = ProtocolTiming.clamped(pollInterval, floor: 0.01)
         self.pollParam = pollParam
-        self.watchdog = watchdog
+        self.watchdog = ProtocolTiming.clamped(watchdog)
         self.autoReconnect = autoReconnect
-        self.reconnectBackoff = reconnectBackoff
-        self.getRetries = getRetries
-        self.gap = gap ?? model.commandGap
-        self.backoff = reconnectBackoff.initial
+        let initial = ProtocolTiming.clamped(reconnectBackoff.initial, floor: 0.01)
+        self.reconnectBackoff = (initial, max(initial, ProtocolTiming.clamped(reconnectBackoff.max)))
+        self.getRetries = ProtocolTiming.clampedRetries(getRetries)
+        self.gap = ProtocolTiming.clamped(gap ?? model.commandGap)
+        self.backoff = initial
         (statusUpdates, statusContinuation) = AsyncStream.makeStream(of: ProcessorStatus.self)
     }
 
@@ -152,7 +155,7 @@ public actor DolbyCP {
     /// next one, so a processor that takes a single connection has dropped
     /// the old session first (the Q-SYS plugin waits two seconds). Zero by
     /// default.
-    public func setReopenPause(_ seconds: Double) { reopenPause = max(0, seconds) }
+    public func setReopenPause(_ seconds: Double) { reopenPause = ProtocolTiming.clamped(seconds) }
     private var reopenPause: Double = 0
     /// When this client last closed a link that was up.
     private var lastClose: ContinuousClock.Instant?
@@ -247,13 +250,14 @@ public actor DolbyCP {
     public func set(_ param: String, _ value: WireValue, timeout: Double = 0.5) async throws(ProtocolError) -> Bool {
         _ = try WireProtocol.formatSet(model: model, param: param, value: value)
         if !(await linkUp()), !autoReconnect { return false }
-        queue.enqueue(PendingSet(param: param, value: value, timeout: timeout))
+        queue.enqueue(PendingSet(param: param, value: value, timeout: ProtocolTiming.clamped(timeout)))
         return true
     }
 
     /// Query `param`: its value, or nil on timeout, a dead link, or a reply
     /// that does not name it. The link is checked before the param is framed.
     public func get(_ param: String, timeout: Double = ProtocolTiming.queryTimeout) async throws(ProtocolError) -> String? {
+        let timeout = ProtocolTiming.clamped(timeout)
         if !(await linkUp()), autoReconnect { _ = await reopenForCommand() }
         if !(await linkUp()) {
             mark(.missing, "get: link is down")
@@ -292,6 +296,8 @@ public actor DolbyCP {
     /// Nil when the header does not come.
     public func getList(_ param: String, timeout: Double = ProtocolTiming.queryTimeout,
                         itemTimeout: Double = 0.3, limit: Int = 64) async throws(ProtocolError) -> [String]? {
+        let timeout = ProtocolTiming.clamped(timeout)
+        let itemTimeout = ProtocolTiming.clamped(itemTimeout)
         if !(await linkUp()), autoReconnect { _ = await reopenForCommand() }
         if !(await linkUp()) {
             mark(.missing, "get: link is down")
@@ -336,7 +342,7 @@ public actor DolbyCP {
     /// Wait until the queue is empty and nothing is in flight; true if that
     /// happened within `timeout`.
     public func settle(timeout: Double = 5) async -> Bool {
-        let deadline = ContinuousClock.now + .seconds(timeout)
+        let deadline = ContinuousClock.now + .seconds(ProtocolTiming.clamped(timeout))
         while ContinuousClock.now < deadline {
             if queue.isEmpty, !queue.hasInflight, !busy { return true }
             do { try await Task.sleep(for: .milliseconds(1)) } catch { return false }   // cancelled
