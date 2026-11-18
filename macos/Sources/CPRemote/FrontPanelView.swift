@@ -44,7 +44,7 @@ private let printColor = Color(white: 0.12)
 private let disabledOpacity = 0.4
 
 /// The front panel of the processor the app is set to: the CP650's live
-/// panel, or the CP750's and CP850/CP950's drawn fronts.
+/// panel, or the CP750's, CP850's and CP950's drawn fronts.
 struct FrontPanelView: View {
     @ObservedObject var model: RemoteModel
 
@@ -53,7 +53,8 @@ struct FrontPanelView: View {
         Group {
             switch model.processorModel {
             case .cp750: CP750Panel(model: model)
-            case .cp850, .cp950, .cp950a: CP950Panel(model: model)
+            case .cp850: CP850Panel(model: model)
+            case .cp950, .cp950a: CP950Panel(model: model)
             case .cp650: CP650Panel(model: model)
             }
         }

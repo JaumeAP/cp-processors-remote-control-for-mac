@@ -63,8 +63,9 @@ final class RemoteModel: ObservableObject {
     private static let setReplyTimeout: Double = 3
     private static let hostKey = "processorHost"
     private static let modelKey = "processorModel"
-    /// The models the Setup menu offers. CP850 and CP950 share one front.
-    static let choices: [ProcessorModel] = [.cp650, .cp750, .cp950]
+    /// The models the Setup menu offers. The CP950 choice covers the CP950A
+    /// (one front, one protocol).
+    static let choices: [ProcessorModel] = [.cp650, .cp750, .cp850, .cp950]
 
     @Published var host: String {
         didSet { defaults.set(host, forKey: Self.hostKey) }
@@ -311,7 +312,7 @@ final class RemoteModel: ObservableObject {
 
     /// The name shown for a choice in Setup.
     static func choiceName(_ model: ProcessorModel) -> String {
-        model == .cp950 ? "CP850 / CP950" : model.rawValue
+        model == .cp950 ? "CP950 / CP950A" : model.rawValue
     }
 
     /// Names of the standard Dolby cinema formats (CP650 user's manual);
@@ -659,7 +660,8 @@ extension ProcessorModel {
         switch self {
         case .cp650: panelAspect
         case .cp750: 935 / 180
-        case .cp850, .cp950, .cp950a: 890 / 242
+        case .cp850: 483 / 89          // a 2U, 19-inch front
+        case .cp950, .cp950a: 890 / 242
         }
     }
 }
