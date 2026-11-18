@@ -132,32 +132,70 @@ public actor DolbyCP {
 
     // MARK: - Lifecycle
 
-    /// Open the transport and start the drain and watchdog tasks. True on
-    /// success; the status is ok or missing.
+    /// Open the transport (keeping a link that is already up) and start the
+    /// drain and watchdog tasks. True on success; the status is ok or missing.
     public func connect() async -> Bool {
         await enterLifecycle()
         defer { leaveLifecycle() }
-        return await connectUnlocked()
+        return await openAndStart(fresh: false, event: "connect")
     }
 
     /// Close the current link and open a fresh one. Queued commands survive.
     public func reconnect() async -> Bool {
         await enterLifecycle()
         defer { leaveLifecycle() }
-        await stopBackground()
-        await closeLocked()
-        await pauseBeforeReopen()
-        return await connectUnlocked()
+        return await openAndStart(fresh: true, event: "connect")
     }
 
-    /// Seconds to wait between closing a link and opening the next one, so a
-    /// processor that takes a single connection has dropped the old session
-    /// first (the Q-SYS plugin waits two seconds). Zero by default.
+    /// Seconds to wait between closing a link that was up and opening the
+    /// next one, so a processor that takes a single connection has dropped
+    /// the old session first (the Q-SYS plugin waits two seconds). Zero by
+    /// default.
     public func setReopenPause(_ seconds: Double) { reopenPause = max(0, seconds) }
     private var reopenPause: Double = 0
+    /// When this client last closed a link that was up.
+    private var lastClose: ContinuousClock.Instant?
 
+    /// Wait out what is left of the reopen pause since the last close.
     private func pauseBeforeReopen() async {
-        if reopenPause > 0 { try? await Task.sleep(for: .seconds(reopenPause)) }
+        guard reopenPause > 0, let lastClose else { return }
+        let left = lastClose + .seconds(reopenPause) - .now
+        if left > .zero { try? await Task.sleep(for: left) }
+    }
+
+    /// Close the transport; a link that was up starts the reopen pause.
+    private func closeTransport() async {
+        let wasUp = await linkUp()
+        await transport.close()
+        if wasUp { lastClose = .now }
+    }
+
+    /// The lifecycle body of `connect` and `reconnect`: stop the background
+    /// tasks, open under the command lock, then start them again.
+    private func openAndStart(fresh: Bool, event: String) async -> Bool {
+        disconnected = false
+        await stopBackground()
+        let ok = await openLocked(fresh: fresh)
+        record("\(event) \(ok ? "succeeded" : "failed")")
+        mark(ok ? .ok : .missing, event)
+        if ok {
+            lastActivity = .now
+            startBackground()
+        }
+        return ok
+    }
+
+    /// Hold the command lock from the close, through the reopen pause, to the
+    /// open, so no other path can open a session in between (a processor that
+    /// takes one connection ignores a second). Without `fresh`, a link that
+    /// is up is kept.
+    private func openLocked(fresh: Bool) async -> Bool {
+        await acquire()
+        defer { release() }
+        if !fresh, await linkUp() { return true }
+        await closeTransport()
+        await pauseBeforeReopen()
+        return await transport.connect()
     }
 
     /// Stop the background tasks, close the link, status missing.
@@ -174,19 +212,6 @@ public actor DolbyCP {
     /// Set by `disconnect()`, cleared by `connect()` and `reconnect()`: a
     /// `get` still running must not reopen a link the caller closed.
     private var disconnected = false
-
-    private func connectUnlocked() async -> Bool {
-        disconnected = false
-        await stopBackground()
-        let ok = await connectLocked()
-        record("connect \(ok ? "succeeded" : "failed")")
-        mark(ok ? .ok : .missing, "connect")
-        if ok {
-            lastActivity = .now
-            startBackground()
-        }
-        return ok
-    }
 
     // MARK: - Lifecycle gate
 
@@ -228,7 +253,7 @@ public actor DolbyCP {
     /// Query `param`: its value, or nil on timeout, a dead link, or a reply
     /// that does not name it. The link is checked before the param is framed.
     public func get(_ param: String, timeout: Double = ProtocolTiming.queryTimeout) async throws(ProtocolError) -> String? {
-        if !(await linkUp()), autoReconnect { _ = await reconnectTransport() }
+        if !(await linkUp()), autoReconnect { _ = await reopenForCommand() }
         if !(await linkUp()) {
             mark(.missing, "get: link is down")
             return nil
@@ -252,7 +277,7 @@ public actor DolbyCP {
                 return pair.value
             }
             if attempt < attempts - 1, !(await linkUp()), autoReconnect {
-                _ = await reconnectTransport()
+                _ = await reopenForCommand()
             }
         }
         return nil
@@ -265,7 +290,7 @@ public actor DolbyCP {
     /// come, or names something else.
     public func getList(_ param: String, timeout: Double = ProtocolTiming.queryTimeout,
                         itemTimeout: Double = 0.3, limit: Int = 64) async throws(ProtocolError) -> [String]? {
-        if !(await linkUp()), autoReconnect { _ = await reconnectTransport() }
+        if !(await linkUp()), autoReconnect { _ = await reopenForCommand() }
         if !(await linkUp()) {
             mark(.missing, "get: link is down")
             return nil
@@ -406,14 +431,17 @@ public actor DolbyCP {
         }
     }
 
-    /// Swap in a fresh link without stopping the background tasks.
-    private func reconnectTransport() async -> Bool {
+    /// Reopen a link that is down, holding the command lock from the close to
+    /// the open. A link another path reopened while this one waited for the
+    /// lock is kept as it is (queued reopens coalesce).
+    private func reopenLink() async -> Bool {
         await acquire()
         defer { release() }
         // A watchdog cancelled while it waited for the lock (disconnect), or
         // a `get` from any task after `disconnect()`, must not reopen the link.
         guard !Task.isCancelled, !disconnected else { return false }
-        await transport.close()
+        if await linkUp() { return true }
+        await closeTransport()
         await pauseBeforeReopen()
         guard !Task.isCancelled, !disconnected else { return false }
         let ok = await transport.connect()
@@ -423,10 +451,25 @@ public actor DolbyCP {
         return ok
     }
 
+    /// The reopen of `get` and `getList`: inside the lifecycle gate, so it
+    /// never overlaps `connect`, `reconnect` or `disconnect`, and it starts
+    /// the drain and watchdog tasks when they are not running (after a
+    /// failed connect, nothing else would send the queued SETs).
+    private func reopenForCommand() async -> Bool {
+        await enterLifecycle()
+        defer { leaveLifecycle() }
+        let ok = await reopenLink()
+        if ok, drainTask == nil, !disconnected { startBackground() }
+        return ok
+    }
+
+    /// The watchdog's reopen. It cannot wait for the lifecycle gate (a
+    /// lifecycle call stops the watchdog and waits for it to end), so it
+    /// leaves the link to a lifecycle call in progress.
     private func autoReconnectStep() async {
         try? await Task.sleep(for: .seconds(backoff))
-        guard !Task.isCancelled else { return }
-        let ok = await reconnectTransport()
+        guard !Task.isCancelled, !lifecycleBusy else { return }
+        let ok = await reopenLink()
         backoff = ok ? reconnectBackoff.initial : min(backoff * 2, reconnectBackoff.max)
     }
 
@@ -569,15 +612,8 @@ public actor DolbyCP {
     /// mid-exchange on it (the transport allows one reader and one writer).
     private func closeLocked() async {
         await acquire()
-        await transport.close()
+        await closeTransport()
         release()
-    }
-
-    /// Open the transport while holding the command lock.
-    private func connectLocked() async -> Bool {
-        await acquire()
-        defer { release() }
-        return await transport.connect()
     }
 
     private static func isWriteTimeout(_ error: any Error) -> Bool {
