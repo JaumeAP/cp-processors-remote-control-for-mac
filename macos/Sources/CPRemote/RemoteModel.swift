@@ -151,10 +151,15 @@ final class RemoteModel: ObservableObject {
     /// Where the app and its link write their events; nil for none (tests).
     private let log: ConnectionLog?
 
-    init(defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared) {
+    /// The CP650's reopen pause, `cp650ReopenPause` unless a test sets it.
+    let reopenPause: Double
+
+    init(defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared,
+         reopenPause: Double = RemoteModel.cp650ReopenPause) {
         self.defaults = defaults
         self.port = port
         self.log = log
+        self.reopenPause = reopenPause
         host = defaults.string(forKey: Self.hostKey) ?? ""
         levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
         processorModel = defaults.string(forKey: Self.modelKey)
@@ -198,19 +203,23 @@ final class RemoteModel: ObservableObject {
         let model = chosen ?? processorModel
         let name = Self.choiceName(model)
         let port = self.port ?? model.defaultPort
-        if let cp = processor, processorHost == address, status == .ok, cp.model == model {
+        // A main link to that address, in any state (up, reopening, hung), is
+        // asked: a second session to a CP650 would block the main one.
+        if let cp = processor, processorHost == address, cp.model == model {
             guard let level = Self.faderLevel(try? await cp.get(model.panel.fader)) else {
                 return "Connected to \(address), but no fader reply."
             }
             return "OK: the connected \(name) at \(address) answered, fader \(Self.faderText(level))."
         }
         let cp = DolbyCP(host: address, port: port, model: model)
+        await pauseAfterClose(address, port, model: model)
         guard await cp.connect() else {
             await cp.disconnect()
             return "No connection to \(address) on port \(port)."
         }
         let reply = try? await cp.get(model.panel.fader)
         await cp.disconnect()
+        Self.closed(address, port, model: model)
         guard let level = Self.faderLevel(reply) else {
             return "Connected to \(address):\(port), but no fader reply."
         }
@@ -379,12 +388,25 @@ final class RemoteModel: ObservableObject {
     /// long to drop the old session before the next one opens.
     static let cp650ReopenPause = 2.0
 
+    /// When this app last closed a CP650 session to each address and port:
+    /// the main link, a Test link. Shared by every model object of the app.
+    private static var cp650Closes: [String: ContinuousClock.Instant] = [:]
+
+    /// Note that a session to `address` was just closed (CP650 only).
+    private static func closed(_ address: String, _ port: UInt16, model: ProcessorModel) {
+        if model == .cp650 { cp650Closes["\(address):\(port)"] = .now }
+    }
+
+    /// Wait out what is left of the CP650's reopen pause since this app last
+    /// closed a session to `address`.
+    private func pauseAfterClose(_ address: String, _ port: UInt16, model: ProcessorModel) async {
+        guard model == .cp650, let closed = Self.cp650Closes["\(address):\(port)"] else { return }
+        let left = closed + .seconds(reopenPause) - .now
+        if left > .zero { try? await Task.sleep(for: left) }
+    }
+
     private func connectNow() async {
-        let hadLink = processor != nil
         await disconnectNow()
-        if hadLink, processorModel == .cp650 {
-            try? await Task.sleep(for: .seconds(Self.cp650ReopenPause))
-        }
         let address = trimmedHost
         guard !address.isEmpty else {
             message = "Set the processor IP in Setup"
@@ -392,7 +414,7 @@ final class RemoteModel: ObservableObject {
             return
         }
         let cp = DolbyCP(host: address, port: port, model: processorModel, autoReconnect: true)
-        if processorModel == .cp650 { await cp.setReopenPause(Self.cp650ReopenPause) }
+        if processorModel == .cp650 { await cp.setReopenPause(reopenPause) }
         note("connect to \(address) as \(processorModel.rawValue)")
         if let log { await cp.setEventLog { line in log.write("link: \(line)") } }
         processor = cp
@@ -417,6 +439,10 @@ final class RemoteModel: ObservableObject {
                 self.apply(status: value)
             }
         }
+        // A CP650 session this app closed a moment ago (the main link, a
+        // Test link) may still hold the unit's one connection.
+        await pauseAfterClose(address, port ?? processorModel.defaultPort, model: processorModel)
+        guard processor === cp else { return }
         let ok = await cp.connect()
         guard processor === cp else { return }
         apply(status: await cp.status)
@@ -447,6 +473,7 @@ final class RemoteModel: ObservableObject {
         endKnobTurn()
         guard let cp = processor else { return }
         note("disconnect requested")
+        let closedHost = processorHost
         processor = nil
         processorHost = nil
         programmedFormats = nil
@@ -458,6 +485,7 @@ final class RemoteModel: ObservableObject {
         apply(status: .missing)
         message = "Not connected"
         await cp.disconnect()
+        if let closedHost, let closedPort = cp.port { Self.closed(closedHost, closedPort, model: cp.model) }
     }
 
     /// Record a status change. A status other than ok disables the controls

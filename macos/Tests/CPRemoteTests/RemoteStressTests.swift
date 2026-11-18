@@ -144,12 +144,12 @@ private final class Simulator: @unchecked Sendable {
 /// A model on its own defaults suite, pointed at the simulator, with the
 /// simulator's processor model chosen.
 @MainActor
-private func makeModel(_ sim: Simulator) -> RemoteModel {
+private func makeModel(_ sim: Simulator, reopenPause: Double = RemoteModel.cp650ReopenPause) -> RemoteModel {
     // One suite for every test, emptied each time: no file per model.
     let suite = "CPRemoteTests"
     let defaults = UserDefaults(suiteName: suite)!
     defaults.removePersistentDomain(forName: suite)
-    let model = RemoteModel(defaults: defaults, port: sim.port, log: nil)
+    let model = RemoteModel(defaults: defaults, port: sim.port, log: nil, reopenPause: reopenPause)
     model.host = "127.0.0.1"
     model.choose(sim.model)
     return model
@@ -389,11 +389,12 @@ struct RemoteStressTests {
         await model.disconnect()
     }
 
-    /// 50 connect/disconnect cycles, some interleaved with presses.
+    /// 50 connect/disconnect cycles, some interleaved with presses (with a
+    /// short reopen pause: the simulator takes any number of connections).
     @Test func connectDisconnectCycles() async throws {
         let sim = try await Simulator()
         defer { sim.stop() }
-        let model = makeModel(sim)
+        let model = makeModel(sim, reopenPause: 0.05)
         for cycle in 0..<50 {
             await model.connect()
             #expect(await eventually { model.isConnected }, "cycle \(cycle)")
@@ -1073,6 +1074,49 @@ struct BoothSafetyTests {
         // a queued SET would go out right after it.
         try await Task.sleep(for: .seconds(7))
         #expect(sim.setsReceived("fader_level") == 0, "a fader SET went out before the panel was read")
+        await model.disconnect()
+    }
+}
+
+/// The CP650 takes one control session; the app never makes it hold two.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct CP650SessionTests {
+    /// A main link opened right after Setup's Test closed its own session
+    /// waits for the unit to drop that one (it used to open at once and be
+    /// ignored until two silent polls forced a reopen, about 17 s).
+    @Test func connectRightAfterATestWaitsForTheTestSession() async throws {
+        let sim = try await Simulator(extraArguments: ["--strict-cp650", "--linger", "1.5"])
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        #expect(await model.test(address: "127.0.0.1").hasPrefix("OK"))
+        await model.connect()
+        #expect(await eventually(6) { model.isConnected }, "the main session was ignored")
+        await model.disconnect()
+    }
+
+    /// Setup's Test asks over the main link whatever its state: a second
+    /// session to a CP650 blocks the main one.
+    @Test func testNeverOpensASecondSessionNextToTheMainLink() async throws {
+        let sim = try await Simulator(control: true)
+        defer { sim.stop() }
+        let model = try await connected(sim)
+        #expect(await sim.command("set silent 1") == "OK\n")
+        #expect(await eventually(10) { model.status != .ok })        // the main link is not answering
+        var done = false
+        let test = Task {
+            let result = await model.test(address: "127.0.0.1")
+            done = true
+            return result
+        }
+        var most = 0
+        while !done {
+            most = max(most, await sim.connections() ?? 0)
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        _ = await test.value
+        #expect(most == 1, "the Test opened a second session next to the main link")
+        #expect(await sim.command("set silent 0") == "OK\n")
         await model.disconnect()
     }
 }
