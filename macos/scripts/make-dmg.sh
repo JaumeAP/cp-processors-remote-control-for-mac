@@ -1,6 +1,8 @@
 #!/bin/bash
 # Build CP Remote in release mode, wrap it in a .app bundle and pack it in
-# a DMG with an Applications shortcut for drag-and-drop installation.
+# a DMG with an Applications shortcut for drag-and-drop installation. Writes
+# CPRemote-<version>.dmg and an identical CPRemote.dmg (fixed name, for the
+# "latest release" download link).
 #
 # Usage: macos/scripts/make-dmg.sh <output-dir>
 #
@@ -63,3 +65,10 @@ rm -f "$dmg"
 hdiutil create -volname "CP Remote $VERSION" -srcfolder "$work/stage" -ov -format UDZO "$dmg" >/dev/null
 hdiutil verify "$dmg" >/dev/null
 echo "$dmg"
+
+# The same disk image under a fixed name, for the link that always points to
+# the newest release (.../releases/latest/download/CPRemote.dmg). Upload both
+# files to every GitHub release.
+latest="$out/$APP_NAME.dmg"
+cp -f "$dmg" "$latest"
+echo "$latest"
