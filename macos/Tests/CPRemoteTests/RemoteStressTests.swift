@@ -15,7 +15,7 @@ import Vision
 
 // MARK: - Simulator
 
-/// `$CPSIM_BIN`, else `cpp/build/processor_sim` in this checkout.
+/// `$CPSIM_BIN`, else `simulator/build/processor_sim` in this checkout.
 private let simulatorPath: String? = {
     if let env = ProcessInfo.processInfo.environment["CPSIM_BIN"], !env.isEmpty {
         return FileManager.default.isExecutableFile(atPath: env) ? env : nil
@@ -23,7 +23,7 @@ private let simulatorPath: String? = {
     let repo = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
-    let path = repo.appendingPathComponent("cpp/build/processor_sim").path
+    let path = repo.appendingPathComponent("simulator/build/processor_sim").path
     return FileManager.default.isExecutableFile(atPath: path) ? path : nil
 }()
 
@@ -143,8 +143,20 @@ private final class Simulator: @unchecked Sendable {
 
 /// A model on its own defaults suite, pointed at the simulator, with the
 /// simulator's processor model chosen.
+/// The defaults suites shared by many tests are removed when the test process
+/// ends, so no test leaves a file in ~/Library/Preferences (each test empties
+/// them when it starts; the other suites are removed by their own tests).
+private let removeSharedSuitesAtExit: Void = {
+    atexit {
+        for suite in ["CPRemoteTests", "CPRemoteTests.render"] {
+            UserDefaults.standard.removePersistentDomain(forName: suite)
+        }
+    }
+}()
+
 @MainActor
 private func makeModel(_ sim: Simulator, reopenPause: Double = RemoteModel.cp650ReopenPause) -> RemoteModel {
+    _ = removeSharedSuitesAtExit
     // One suite for every test, emptied each time: no file per model.
     let suite = "CPRemoteTests"
     let defaults = UserDefaults(suiteName: suite)!
@@ -211,7 +223,7 @@ private func settles(_ model: RemoteModel, _ sim: Simulator, on expected: String
 // MARK: - Tests
 
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
 struct RemoteStressTests {
     /// Values unlike the model's defaults, so a read is told from no read.
     @Test func connectReadsThePanel() async throws {
@@ -666,7 +678,7 @@ struct RemoteStressTests {
 /// parameter names and scales, as their manuals give them, against the
 /// simulator.
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
 struct OtherProcessorTests {
     @Test func cp750ReadsAndDrivesItsPanel() async throws {
         let sim = try await Simulator(model: .cp750)
@@ -721,7 +733,7 @@ struct OtherProcessorTests {
 /// Every front-panel control of each processor, pressed one by one against
 /// the simulator, and the processor's own value checked for each.
 @MainActor
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs cpp/build/processor_sim or $CPSIM_BIN"))
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
 struct EveryControlTests {
     @Test func cp650EveryFormatButtonAndMute() async throws {
         let sim = try await Simulator(model: .cp650)
@@ -924,32 +936,47 @@ struct ReconnectAfterCutTests {
 }
 
 /// Every front panel draws, the same way twice (a blank or unstable panel
-/// fails here). The pictures are kept only when CPREMOTE_RENDER_DIR names a
-/// folder.
+/// fails here). The two pictures are compared pixel by pixel with a small
+/// tolerance: byte-equal PNGs failed now and then under load (antialiasing
+/// and compression varied) while the pictures were the same. The pictures
+/// are kept only when CPREMOTE_RENDER_DIR names a folder.
 @MainActor
 @Suite struct PanelRenderTests {
     @Test(arguments: [ProcessorModel.cp650, .cp750, .cp850, .cp950])
     func frontDrawsDeterministically(_ processor: ProcessorModel) throws {
+        _ = removeSharedSuitesAtExit
         let model = RemoteModel(defaults: UserDefaults(suiteName: "CPRemoteTests.render")!, log: nil)
         model.choose(processor)
         let width: CGFloat = 900
         let size = CGSize(width: width, height: width / processor.aspect)
-        func render() throws -> Data {
+        func render() throws -> NSBitmapImageRep {
             let renderer = ImageRenderer(content: FrontPanelView(model: model).frame(width: size.width, height: size.height))
             renderer.scale = 1
-            let image = try #require(renderer.nsImage)
-            let tiff = try #require(image.tiffRepresentation)
-            let bitmap = try #require(NSBitmapImageRep(data: tiff))
-            return try #require(bitmap.representation(using: .png, properties: [:]))
+            return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
         }
         let first = try render()
         let second = try render()
+        let png = try #require(first.representation(using: .png, properties: [:]))
         // CPREMOTE_RENDER_DIR keeps the picture, to look at a front by eye.
         if let folder = ProcessInfo.processInfo.environment["CPREMOTE_RENDER_DIR"], !folder.isEmpty {
-            try first.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(processor.rawValue).png"))
+            try png.write(to: URL(fileURLWithPath: folder).appendingPathComponent("\(processor.rawValue).png"))
         }
-        #expect(first.count > 20_000, "a blank panel would be almost empty")
-        #expect(first == second, "the same state must draw the same picture")
+        #expect(png.count > 20_000, "a blank panel would be almost empty")
+        #expect(first.pixelsWide == second.pixelsWide && first.pixelsHigh == second.pixelsHigh)
+        // Pixels differing by more than a few levels, sampled every 3 pixels.
+        var differing = 0, sampled = 0
+        for y in stride(from: 0, to: first.pixelsHigh, by: 3) {
+            for x in stride(from: 0, to: first.pixelsWide, by: 3) {
+                guard let a = first.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      let b = second.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+                sampled += 1
+                let delta = abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
+                    + abs(a.blueComponent - b.blueComponent)
+                if delta > 0.05 { differing += 1 }
+            }
+        }
+        #expect(Double(differing) <= Double(sampled) * 0.001,
+                "the same state must draw the same picture (\(differing) of \(sampled) pixels differ)")
     }
 }
 
@@ -1142,6 +1169,35 @@ struct MacroRecoveryTests {
         await other.disconnect()
         #expect(await eventually(40) { model.macroPreset == 4 && model.macroName == "Music" },
                 "the macro changed on the unit was never shown")
+        await model.disconnect()
+    }
+
+    /// A macro changed on the unit whose name goes unanswered: the new number
+    /// is never shown beside the previous macro's name.
+    @Test func aNewMacroIsNeverShownWithTheOldName() async throws {
+        let sim = try await Simulator(model: .cp950, control: true)
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(await eventually { model.isConnected && model.macroName == "5.1 + Dolby Atmos" })
+        #expect(await sim.command("set ignore sys.macro_name") == "OK\n")
+        let other = DolbyCP(host: "127.0.0.1", port: sim.port, model: .cp950, gap: 0.05)
+        #expect(await other.connect())
+        #expect(try await other.set("sys.macro_preset", 2))          // not in the unit's list
+        #expect(await other.settle(timeout: 3))
+        await other.disconnect()
+        var mismatched = 0
+        let deadline = ContinuousClock.now + .seconds(12)
+        while ContinuousClock.now < deadline, model.macroPreset != 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<100 {                                          // and for a second after
+            if model.macroPreset == 2, model.macroName == "5.1 + Dolby Atmos" { mismatched += 1 }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(model.macroPreset == 2)
+        #expect(mismatched == 0, "macro 2 shown with macro 1's name")
+        #expect(await sim.command("set ignore none") == "OK\n")
         await model.disconnect()
     }
 }

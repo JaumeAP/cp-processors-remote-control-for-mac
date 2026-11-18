@@ -18,11 +18,16 @@ import Network
 ///    `sendFailed` on a connection error (the link is then down).
 /// 5. `readLine` follows `LineBuffer`; a reset makes every read return nil.
 public actor TCPTransport: LineTransport {
-    public enum Failure: Error, Sendable {
+    public enum Failure: TransportFailure, Sendable {
         case notConnected
         case notASCII
         case sendFailed(String)
         case writeTimedOut
+
+        public var isWriteTimeout: Bool {
+            if case .writeTimedOut = self { return true }
+            return false
+        }
     }
 
     public nonisolated let host: String

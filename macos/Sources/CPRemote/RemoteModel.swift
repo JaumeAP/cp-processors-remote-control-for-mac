@@ -113,7 +113,6 @@ final class RemoteModel: ObservableObject {
     private static let decibelsKey = "levelInDecibels"
     @Published private(set) var muted = false
     @Published private(set) var status: ProcessorStatus = .missing
-    @Published private(set) var message = "Not connected"
     /// The fader has been read on the current link. Until then the controls
     /// stay disabled, so a first touch never starts from a stale level.
     @Published private(set) var panelRead = false
@@ -409,7 +408,6 @@ final class RemoteModel: ObservableObject {
         await disconnectNow()
         let address = trimmedHost
         guard !address.isEmpty else {
-            message = "Set the processor IP in Setup"
             showSetup = true
             return
         }
@@ -431,7 +429,6 @@ final class RemoteModel: ObservableObject {
         muted = false
         formatButton = nil
         programmedFormats = nil
-        message = "Connecting to \(address)…"
         panelRead = false
         statusTask = Task { [weak self] in
             for await value in cp.statusUpdates {
@@ -446,7 +443,7 @@ final class RemoteModel: ObservableObject {
         let ok = await cp.connect()
         guard processor === cp else { return }
         apply(status: await cp.status)
-        if !ok { message = "No answer from \(address), retrying…" }
+        if !ok { note("no answer from \(address) at connect: the poll retries") }
         startPolling(cp)
     }
 
@@ -455,7 +452,6 @@ final class RemoteModel: ObservableObject {
             return await connectNow()
         }
         note("reconnect requested")
-        message = "Reconnecting to \(trimmedHost)…"
         panelRead = false
         formatListDue = true
         resetMacroReads()
@@ -483,7 +479,6 @@ final class RemoteModel: ObservableObject {
         macros = nil
         panelRead = false
         apply(status: .missing)
-        message = "Not connected"
         await cp.disconnect()
         if let closedHost, let closedPort = cp.port { Self.closed(closedHost, closedPort, model: cp.model) }
     }
@@ -495,7 +490,6 @@ final class RemoteModel: ObservableObject {
     private func apply(status value: ProcessorStatus) {
         note("status \(value), panel read \(panelRead)")
         status = value
-        updateMessage()
         announceConnectionChange()
         guard value != .ok, panelRead, let cp = processor else { return }
         Task { [weak self] in
@@ -512,13 +506,7 @@ final class RemoteModel: ObservableObject {
         guard panelRead else { return }
         panelRead = false
         note("controls disabled: \(why)")
-        updateMessage()
         announceConnectionChange()
-    }
-
-    private func updateMessage() {
-        guard let address = processorHost else { return }
-        message = isConnected || status == .ok ? "Connected to \(address)" : "Lost \(address), retrying…"
     }
 
     private func announceConnectionChange() {
@@ -672,7 +660,6 @@ final class RemoteModel: ObservableObject {
         if faderRead != nil, muteReply != nil, isCurrent(cp), !panelRead {
             panelRead = true
             note("panel read: controls enabled")
-            updateMessage()
             announceConnectionChange()
         }
 
@@ -690,19 +677,26 @@ final class RemoteModel: ObservableObject {
                 macroMisses = 0
                 if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
                    await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp) {
-                    macroPreset = number
-                    if macroNameNumber != number {
+                    if macroNameNumber == number {
+                        macroPreset = number
+                    } else {
+                        // The number and its name change together: a new key
+                        // is never shown beside the old macro's name.
                         start = .now
                         let nameReply = try? await cp.get(nameParam)
                         guard isCurrent(cp) else { return }
                         if let nameReply {
                             if await mayApply(nameParam, readStartedAt: start, on: cp), isCurrent(cp),
-                               macroPreset == number {
+                               await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp) {
+                                macroPreset = number
                                 macroName = nameReply.trimmingCharacters(in: .whitespaces)
                                 macroNameNumber = number
                             }
                         } else {
                             macroReadMissed()
+                            macroPreset = number          // the number without a name, not the old name
+                            macroName = macros?.first { $0.number == number }?.name
+                            macroNameNumber = macroName == nil ? nil : number
                         }
                     }
                 }

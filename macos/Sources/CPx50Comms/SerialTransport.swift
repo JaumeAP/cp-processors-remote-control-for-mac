@@ -16,11 +16,16 @@ import Foundation
 ///    descriptor number reused by the next `connect()` is never touched by the
 ///    old link.
 public actor SerialTransport: LineTransport {
-    public enum Failure: Error, Sendable {
+    public enum Failure: TransportFailure, Sendable {
         case notConnected
         case notASCII
         case writeFailed(Int32)
         case writeTimedOut
+
+        public var isWriteTimeout: Bool {
+            if case .writeTimedOut = self { return true }
+            return false
+        }
     }
 
     public nonisolated let device: String

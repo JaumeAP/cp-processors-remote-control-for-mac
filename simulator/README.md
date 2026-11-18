@@ -52,10 +52,13 @@ Its in-process hooks are exposed on the command line:
 5. `--fd N` (repeatable): serve an inherited descriptor such as a pty master,
    like `serve_fd()` on an fd the caller already holds. It is not closed.
 6. `--control`: read commands on stdin and answer on stdout, for test
-   harnesses (the Swift tests
-   do not use it). Commands: `set silent|partial|clip 0|1`,
-   `set latency SECONDS`, `set drop_after N|none`, `drop`, `connections`,
-   `state`, `received`. Each answers `OK`, or lines ending in `END`.
+   harnesses (the app's Swift tests use it to hang, slow down or silence the
+   link while a test runs). Commands: `set silent|partial|clip 0|1`,
+   `set latency SECONDS`, `set drop_after N|none`, `set ignore PARAM|none`
+   (queries of that param get no reply), `drop`, `connections`, `state`,
+   `received`. Each answers `OK`, or lines ending in `END`.
+7. `--query-form any|bare|equals` (CP650): answer `KEY?` and `KEY=?`
+   (default), only `KEY?`, or only `KEY=?`; the other form gets no reply.
 
 ## CI
 
