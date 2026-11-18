@@ -65,7 +65,8 @@ public actor DolbyCP {
                   getRetries: getRetries, gap: gap)
     }
 
-    public static func overSerial(device: String, model: ProcessorModel = .cp750, baudrate: Int = 115200,
+    /// A client over a serial device, at the processors' 9600 baud by default.
+    public static func overSerial(device: String, model: ProcessorModel = .cp750, baudrate: Int = 9600,
                                   pollInterval: Double = ProtocolTiming.defaultPollInterval,
                                   pollParam: String? = nil, watchdog: Double = ProtocolTiming.watchdog,
                                   autoReconnect: Bool = false,

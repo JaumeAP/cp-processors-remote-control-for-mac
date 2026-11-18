@@ -5,8 +5,8 @@ import Foundation
 ///
 /// 1. `connect()` opens the device `O_RDWR | O_NOCTTY | O_NONBLOCK` (so a
 ///    port with its modem lines down cannot block the open), puts it in raw
-///    mode and sets the baud rate (`configureRawSerial`); false if the open
-///    fails.
+///    mode and sets the baud rate (`configureRawSerial`, 9600 by default);
+///    false if the open fails or the rate is not in `supportedBauds`.
 /// 2. `isConnected()`, `peerClosed()`, `sendLine` and `readLine` behave as
 ///    `TCPTransport`'s: lines per `LineBuffer`; the other end closing (a pty
 ///    master closed, a cable pulled) is end of stream; the next failed write
@@ -35,7 +35,9 @@ public actor SerialTransport: LineTransport {
     private var dataWaiter: ResumeOnce<Bool>?
     private let ioQueue = DispatchQueue(label: "SerialTransport")
 
-    public init(device: String, baudrate: Int = 115200, writeTimeout: Double = ProtocolTiming.writeTimeout) {
+    /// `baudrate` defaults to 9600, the speed the processors' manuals give;
+    /// a rate not in `supportedBauds` makes `connect()` fail.
+    public init(device: String, baudrate: Int = 9600, writeTimeout: Double = ProtocolTiming.writeTimeout) {
         self.device = device
         self.baudrate = baudrate
         self.writeTimeout = writeTimeout
@@ -52,6 +54,7 @@ public actor SerialTransport: LineTransport {
     public func peerClosed() -> Bool { link != nil && buffer.atEOF && buffer.isEmpty }
 
     public func connect() async -> Bool {
+        guard supportedBauds.contains(baudrate) else { return false }
         let fd = Darwin.open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)
         guard fd >= 0 else { return false }
         var info = stat()
@@ -183,8 +186,11 @@ private final class SerialLink: @unchecked Sendable {
             }
             notify()
         }
-        source.setCancelHandler { [weak self] in
-            guard let self else { return }
+        // A strong reference: once the transport has let the link go, the
+        // cancel handler is the only one left, and libdispatch releases the
+        // event handler (which held the link) before running it. With a weak
+        // one the link was already gone here and the descriptor never closed.
+        source.setCancelHandler {
             self.locked { self.readerStopped = true }
             self.closeIfIdle()
         }
@@ -270,10 +276,10 @@ private func writeAll(_ fd: Int32, _ bytes: [UInt8], timeout: Double) -> SerialL
     return .written
 }
 
-/// The baud rates the raw-mode setup sets; any other value leaves the speed
-/// unchanged.
-let supportedBauds: Set<Int> = [0, 50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400,
-                                    4800, 9600, 19200, 38400, 57600, 115200, 230400]
+/// The baud rates a serial link can be opened at. Not 0 (B0 hangs the line
+/// up); `SerialTransport.connect()` fails for any other value.
+let supportedBauds: Set<Int> = [50, 75, 110, 134, 150, 200, 300, 600, 1200, 1800, 2400,
+                                4800, 9600, 19200, 38400, 57600, 115200, 230400]
 
 /// Put a tty fd into raw mode and, if `baudrate` is one of `supportedBauds`,
 /// set the speed. A no-op if `fd` is not a tty; errors are ignored.
