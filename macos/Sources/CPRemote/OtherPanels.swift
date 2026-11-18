@@ -72,9 +72,11 @@ private struct Key: View {
 
     var body: some View {
         Button(action: action) {
+            // The lit colour is drawn over the keycap: under it, the opaque
+            // cap hid it and a selected key looked like the others.
             Circle()
-                .fill(lit ?? Color.clear)
-                .overlay(Circle().fill(keyCap))
+                .fill(keyCap)
+                .overlay(Circle().fill(lit ?? Color.clear).opacity(0.75))
                 .overlay(Circle().stroke(Color.black, lineWidth: diameter * 0.08))
                 .shadow(color: lit ?? .clear, radius: diameter * 0.35)
                 .frame(width: diameter, height: diameter)
