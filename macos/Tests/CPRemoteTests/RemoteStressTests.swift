@@ -128,10 +128,12 @@ private final class Simulator: @unchecked Sendable {
         return text.split(separator: "\n").suffix(n).joined(separator: "\n")
     }
 
-    /// SET lines the simulator received for `param`.
+    /// SET lines the simulator received for `param` (not its `param=?` queries).
     func setsReceived(_ param: String) -> Int {
         let text = log.withLock { String(decoding: $0, as: UTF8.self) }
-        return text.split(separator: "\n").filter { $0.contains("recv: \(param)=") }.count
+        return text.split(separator: "\n").filter {
+            $0.contains("recv: \(param)=") && !$0.hasSuffix("recv: \(param)=?")
+        }.count
     }
 
     deinit { stop() }
@@ -1023,6 +1025,58 @@ struct ReconnectAfterCutTests {
 /// A real unit can take more than half a second to answer a SET (a mute
 /// fades, a format change reconfigures it). That must not be taken as a lost
 /// link: the controls stay enabled and the change still arrives.
+@MainActor
+@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+struct BoothSafetyTests {
+    /// Switching from a muted unit to one that is playing: while the controls
+    /// are enabled, the mute shown is never the previous unit's (a Mute
+    /// pressed then would send the opposite of what is meant).
+    @Test func aSwitchedUnitNeverShowsTheOldMuteWhileEnabled() async throws {
+        let muted = try await Simulator(extraArguments: ["--seed", "mute=1"])
+        let port = muted.port
+        let model = try await connected(muted)
+        #expect(await eventually { model.muted })
+        muted.stop()
+        let playing = try await Simulator(port: port)              // the other unit, mute 0
+        defer { playing.stop() }
+        let reconnect = Task { await model.connect() }
+        // Until the switch starts, the controls still show the first unit,
+        // as they should; count from the moment they go off.
+        #expect(await eventually(10) { !model.isConnected })
+        var staleWhileEnabled = 0
+        let deadline = ContinuousClock.now + .seconds(8)
+        while ContinuousClock.now < deadline, !(model.isConnected && !model.muted && model.formatButton != nil) {
+            if model.isConnected, model.muted { staleWhileEnabled += 1 }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        await reconnect.value
+        #expect(staleWhileEnabled == 0, "enabled with the previous unit's mute \(staleWhileEnabled) times")
+        #expect(model.isConnected && !model.muted)
+        await model.disconnect()
+    }
+
+    /// A fader change before the panel is read sends nothing: it would start
+    /// from the previous level and reach the unit as soon as the link is up.
+    @Test func aFaderStepBeforeThePanelIsReadSendsNothing() async throws {
+        let sim = try await Simulator(extraArguments: ["--silent"])   // accepts the link, never answers
+        defer { sim.stop() }
+        let model = makeModel(sim)
+        await model.connect()
+        #expect(!model.isConnected)
+        model.stepKnob(up: true)
+        model.setReference()
+        model.beginKnobTurn()
+        model.turnKnob(byDegrees: 30)
+        model.endKnobTurn()
+        model.setFader(4.0)
+        // The unanswered fader read holds the link for about 5 s (three tries);
+        // a queued SET would go out right after it.
+        try await Task.sleep(for: .seconds(7))
+        #expect(sim.setsReceived("fader_level") == 0, "a fader SET went out before the panel was read")
+        await model.disconnect()
+    }
+}
+
 @MainActor
 @Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
 struct SlowReplyTests {

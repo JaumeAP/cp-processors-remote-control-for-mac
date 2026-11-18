@@ -213,8 +213,11 @@ final class RemoteModel: ObservableObject {
 
     // MARK: - Controls
 
+    /// Move the fader. Only once the panel has been read on the current link:
+    /// a change before then would start from the previous level (another
+    /// unit's, after a switch) and be sent as soon as the link is up.
     func setFader(_ value: Double) {
-        guard value.isFinite else { return }
+        guard value.isFinite, isConnected else { return }
         let clamped = Self.clampFader(value)
         let tenths = max(Int((clamped * 10).rounded()), processorModel.panel.faderMinimum)
         guard Double(tenths) / 10 != fader || pendingFader != nil else { return }
@@ -231,7 +234,7 @@ final class RemoteModel: ObservableObject {
     /// Turn the knob by `degrees` (clockwise positive) and move the fader by
     /// `degrees / degreesPerUnit`, held within 0.0 to 10.0.
     func turnKnob(byDegrees degrees: Double) {
-        guard degrees.isFinite else { return }
+        guard degrees.isFinite, isConnected else { return }
         knobRotation += degrees
         let next = min(max((knobValue ?? fader) + degrees / Self.degreesPerUnit,
                            Self.faderRange.lowerBound), Self.faderRange.upperBound)
@@ -397,6 +400,10 @@ final class RemoteModel: ObservableObject {
         macroPreset = nil
         macros = nil
         macroMisses = 0
+        // A new processor: nothing shown may be the previous unit's.
+        muted = false
+        formatButton = nil
+        programmedFormats = nil
         message = "Connecting to \(address)…"
         panelRead = false
         statusTask = Task { [weak self] in
@@ -494,6 +501,10 @@ final class RemoteModel: ObservableObject {
     /// the SETs reach its queue in the order they were made (the queue then
     /// coalesces them to the newest).
     private func pumpFader() {
+        guard isConnected else {
+            pendingFader = nil          // the panel is unread: never send a level from before
+            return
+        }
         guard !faderInFlight, let value = pendingFader, let cp = processor else { return }
         pendingFader = nil
         faderInFlight = true
@@ -576,17 +587,10 @@ final class RemoteModel: ObservableObject {
             return
         }
         silentPolls = 0
-        if let level = Self.faderLevel(faderReply) {
-            if await mayApply(panel.fader, readStartedAt: start, on: cp), isCurrent(cp),
-               !isTurningKnob, faderIsSettled, fader != level {
-                fader = level
-            }
-            if isCurrent(cp), !panelRead {
-                panelRead = true
-                note("panel read: controls enabled")
-                updateMessage()
-                announceConnectionChange()
-            }
+        let faderRead = Self.faderLevel(faderReply)
+        if let level = faderRead, await mayApply(panel.fader, readStartedAt: start, on: cp), isCurrent(cp),
+           !isTurningKnob, faderIsSettled, fader != level {
+            fader = level
         }
 
         // The selected button: the CP650's format button, or the CP750's input.
@@ -606,10 +610,20 @@ final class RemoteModel: ObservableObject {
         }
 
         start = .now
-        if let reply = try? await cp.get(panel.mute), isCurrent(cp),
-           await mayApply(panel.mute, readStartedAt: start, on: cp), isCurrent(cp),
-           muted != (reply == "1") {
-            muted = reply == "1"
+        let muteReply = try? await cp.get(panel.mute)
+        guard isCurrent(cp) else { return }
+        if let muteReply, await mayApply(panel.mute, readStartedAt: start, on: cp), isCurrent(cp),
+           muted != (muteReply == "1") {
+            muted = muteReply == "1"
+        }
+        // The controls come on only once this pass has read the fader, the
+        // selection and the mute: enabled earlier, they showed the previous
+        // state, and a Mute pressed then sent the opposite of what was meant.
+        if faderRead != nil, muteReply != nil, isCurrent(cp), !panelRead {
+            panelRead = true
+            note("panel read: controls enabled")
+            updateMessage()
+            announceConnectionChange()
         }
 
         // The selected macro, for the screen: its number every poll, its name
