@@ -184,6 +184,32 @@ public actor DolbyCP {
         if left > .zero { try? await Task.sleep(for: left) }
     }
 
+    /// Seconds to listen on a freshly opened link before the first command.
+    /// The CP650 sends a line of its own when a front-panel key is pressed,
+    /// and a unit that another controller polls can be busy: listening first
+    /// reads what it pushes, and sends nothing. Zero, the default, sends at once.
+    public func setListenWindow(_ seconds: Double) { listenWindow = ProtocolTiming.clamped(seconds) }
+    private var listenWindow: Double = 0
+    /// Most lines read in one listen window, so a line that never stops cannot
+    /// hold the link open.
+    static let listenMaxLines = 64
+
+    /// Read the lines the unit pushes until one window passes in silence, and
+    /// apply the ones that parse. Nothing is sent. A line that does not parse
+    /// is noted and skipped.
+    private func listenBeforeFirstCommand() async {
+        guard listenWindow > 0 else { return }
+        var lines = 0
+        while lines < Self.listenMaxLines, let line = await transport.readLine(timeout: listenWindow) {
+            lines += 1
+            record("listen recv \(line)")
+            for pair in WireProtocol.parseResponse(model: model, text: line) where !sameScalars(pair.value, "?") {
+                state.set(pair.param, .string(pair.value))
+            }
+        }
+        record("listen: \(lines) line(s) before the first command")
+    }
+
     /// Close the transport; a link that was up starts the reopen pause.
     private func closeTransport() async {
         let wasUp = await linkUp()
@@ -216,7 +242,9 @@ public actor DolbyCP {
         if !fresh, await linkUp() { return true }
         await closeTransport()
         await pauseBeforeReopen()
-        return await transport.connect()
+        guard await transport.connect() else { return false }
+        await listenBeforeFirstCommand()
+        return true
     }
 
     /// Stop the background tasks, close the link, status missing.

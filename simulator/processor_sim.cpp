@@ -296,6 +296,9 @@ struct Options {
     bool profile = false;  // seed what the control plugin polls
     bool strict_cp650 = false;  // CP650 as Dolby's manual describes it (see Sim::respond_strict)
     double linger = 0.0;        // strict mode: seconds a closed session still blocks the next one
+    // Lines pushed to each TCP session as soon as it opens (--greet), the way a
+    // unit sends a line of its own when a front-panel key is pressed.
+    std::vector<std::string> greet;
     // CP650 queries answered: "any" (KEY? and KEY=?), "bare" (KEY? only) or
     // "equals" (KEY=? only). The other form is echoed and draws no reply.
     std::string query_form = "any";
@@ -363,6 +366,14 @@ public:
         if (strict_ && tcp) {
             if (enter_session()) leave.f = [this] { leave_session(); };
             else blocked = true;
+        }
+        // --greet: lines the unit pushes on its own, before the client sends
+        // anything. A blocked second session gets none.
+        if (tcp && !blocked) {
+            for (const std::string& g : opt_.greet) {
+                trace("send", g);
+                if (!send_all(fd, g + "\n", opt_.write_timeout)) return;
+            }
         }
         while (!eof) {
             std::string raw;
@@ -890,6 +901,10 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
                 std::fprintf(stderr, "processor_sim: invalid --linger %s\n", v.c_str());
                 return false;
             }
+        }
+        else if (arg == "--greet") {
+            if (!value(v)) return false;
+            o.greet.push_back(v);
         }
         else if (arg == "--seed-list") {
             if (!value(v)) return false;
