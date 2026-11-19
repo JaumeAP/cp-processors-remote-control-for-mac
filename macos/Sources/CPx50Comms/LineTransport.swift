@@ -14,6 +14,13 @@ public protocol LineTransport: Sendable {
     func readLine(timeout: Double) async -> String?
     /// Close the link (idempotent).
     func close() async
+    /// Why the last `connect()` failed, for the connection log; nil when it
+    /// succeeded or the transport does not say.
+    func lastConnectFailure() async -> String?
+}
+
+extension LineTransport {
+    public func lastConnectFailure() async -> String? { nil }
 }
 
 /// An error a `sendLine` can throw that may say the write timed out: part or

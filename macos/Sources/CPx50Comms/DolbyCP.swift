@@ -220,13 +220,21 @@ public actor DolbyCP {
         if wasUp { lastClose = .now }
     }
 
+    /// "succeeded", or "failed" with the transport's reason when it gives one.
+    private func outcomeText(_ ok: Bool) async -> String {
+        if ok { return "succeeded" }
+        guard let reason = await transport.lastConnectFailure() else { return "failed" }
+        return "failed (\(reason))"
+    }
+
     /// The lifecycle body of `connect` and `reconnect`: stop the background
     /// tasks, open under the command lock, then start them again.
     private func openAndStart(fresh: Bool, event: String) async -> Bool {
         disconnected = false
         await stopBackground()
         let ok = await openLocked(fresh: fresh)
-        record("\(event) \(ok ? "succeeded" : "failed")")
+        let outcome = await outcomeText(ok)
+        record("\(event) \(outcome)")
         mark(ok ? .ok : .missing, event)
         if ok {
             lastActivity = .now
@@ -547,7 +555,8 @@ public actor DolbyCP {
         await pauseBeforeReopen()
         guard !Task.isCancelled, !disconnected else { return false }
         let ok = await transport.connect()
-        record("reconnect \(ok ? "succeeded" : "failed")")
+        let outcome = await outcomeText(ok)
+        record("reconnect \(outcome)")
         mark(ok ? .ok : .missing, "reconnect")
         if ok { lastActivity = .now }
         return ok
