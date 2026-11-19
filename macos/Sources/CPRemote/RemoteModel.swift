@@ -76,8 +76,10 @@ final class RemoteModel: ObservableObject {
     @Published var showLocalNetworkAlert = false
     private var localNetworkAlertShown = false
     /// The app runs from the disk image or from a translocated copy (opened
-    /// in place from Downloads): macOS ties the Local Network permission to
-    /// where the app is, so it should be in Applications.
+    /// in place from Downloads): it should be in Applications. Whether macOS
+    /// ties the Local Network permission to the path is not documented (it
+    /// tracks the code signature and the executable's UUID), so the alert
+    /// does not promise it.
     @Published var showMoveToApplicationsAlert = RemoteModel.runsOutsideApplications(Bundle.main.bundlePath)
 
     /// True for a bundle path on a mounted disk image or under App

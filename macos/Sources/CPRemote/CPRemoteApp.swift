@@ -46,7 +46,7 @@ struct CPRemoteApp: App {
         }
     }
 
-    private static let moveToApplicationsMessage = "CP Remote is running from the disk image or from the folder it was downloaded to. macOS may then refuse it the local network. Quit it, drag CP Remote to the Applications folder and open it from there."
+    private static let moveToApplicationsMessage = "CP Remote is running from the disk image or from the folder it was downloaded to. a copy run from the disk image is gone once the image is ejected, and macOS may treat the app as a new one and ask again for its permissions. Quit it, drag CP Remote to the Applications folder and open it from there."
 
     var body: some Scene {
         Window("CP Remote", id: "main") {

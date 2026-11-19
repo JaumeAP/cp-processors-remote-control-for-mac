@@ -35,8 +35,9 @@ The image also holds `Release Notes.pdf`, the changes of every version, made
 from `RELEASE_NOTES.md`: add the new version's entry at the top of that file
 before building (the build stops if the newest entry is not the version being
 built).
-The app is ad-hoc signed and not notarized: the first time, open it with
-Control-click, Open.
+The app is ad-hoc signed and not notarized. How to open it the first time,
+and the permissions it needs on each macOS version, are in `INSTALL.md`; the
+release workflow adds that text to every GitHub Release.
 
 ## Connection log
 
