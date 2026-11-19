@@ -299,6 +299,9 @@ struct Options {
     // Lines pushed to each TCP session as soon as it opens (--greet), the way a
     // unit sends a line of its own when a front-panel key is pressed.
     std::vector<std::string> greet;
+    // --require-crlf: a line that does not end in CR LF is answered `error`,
+    // with no echo, as a real CP650 did (report of 2026-11-19).
+    bool require_crlf = false;
     // CP650 queries answered: "any" (KEY? and KEY=?), "bare" (KEY? only) or
     // "equals" (KEY=? only). The other form is echoed and draws no reply.
     std::string query_form = "any";
@@ -386,6 +389,11 @@ public:
             }
             trace("recv", line);
             if (blocked) continue;
+            if (opt_.require_crlf && (raw.empty() || raw.back() != '\r')) {
+                trace("send", "error");
+                if (!send_all(fd, "error\n", opt_.write_timeout)) break;
+                continue;
+            }
 
             if (latency_ > 0.0 && !sleep_interruptibly(latency_)) break;
 
@@ -841,6 +849,7 @@ void usage(FILE* to) {
         "                     [--write-timeout SECONDS] [--idle-timeout SECONDS]\n"
         "                     [--seed-list PARAM=ITEM;ITEM...]... [--profile] [--log] [--control]\n"
         "                     [--strict-cp650] [--linger SECONDS] [--query-form any|bare|equals]\n"
+        "                     [--greet LINE]... [--require-crlf]\n"
         "\n"
         "Live fake CP processor (TCP). Default port: the model's documented port.\n"
         "--seed preloads a value for GETs; --seed-list a multi-line reply (the param,\n"
@@ -852,7 +861,8 @@ void usage(FILE* to) {
         "received) and answers on stdout; for test harnesses. --write-timeout (default\n"
         "2) bounds a send to a client that stopped reading; --idle-timeout (default\n"
         "300) drops a TCP client silent that long. --query-form (CP650, default any)\n"
-        "answers only KEY? (bare) or only KEY=? (equals); the other form gets no reply.\n",
+        "answers only KEY? (bare) or only KEY=? (equals); the other form gets no reply.\n"
+        "--require-crlf answers `error` (no echo) to a line that does not end in CR LF.\n",
         to);
 }
 
@@ -881,7 +891,7 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
         std::string v;
         const bool is_flag = arg == "--help" || arg == "--no-clip" || arg == "--silent" ||
                              arg == "--partial-response" || arg == "--log" || arg == "--control" ||
-                             arg == "--profile" || arg == "--strict-cp650";
+                             arg == "--profile" || arg == "--strict-cp650" || arg == "--require-crlf";
         if (is_flag && has_inline) {
             std::fprintf(stderr, "processor_sim: %s takes no value\n", arg.c_str());
             return false;
@@ -893,6 +903,7 @@ bool parse_args(int argc, char** argv, Options& o, bool& help) {
         else if (arg == "--log") o.log = true;
         else if (arg == "--profile") o.profile = true;
         else if (arg == "--strict-cp650") o.strict_cp650 = true;
+        else if (arg == "--require-crlf") o.require_crlf = true;
         else if (arg == "--linger") {
             if (!value(v)) return false;
             char* end = nullptr;

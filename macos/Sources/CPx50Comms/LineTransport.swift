@@ -7,7 +7,7 @@ public protocol LineTransport: Sendable {
     func peerClosed() async -> Bool
     /// Open the link; true on success.
     func connect() async -> Bool
-    /// Send one line (the newline is added). Throws when it was not sent; the
+    /// Send one line (the line end is added: LF, or CR LF for a CP650). Throws when it was not sent; the
     /// link is then lost, except after a write timeout or a non-ASCII line.
     func sendLine(_ line: String) async throws
     /// The next complete line, or nil on timeout, end of stream or no link.

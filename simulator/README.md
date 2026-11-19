@@ -59,6 +59,10 @@ Its in-process hooks are exposed on the command line:
    `received`. Each answers `OK`, or lines ending in `END`.
 7. `--query-form any|bare|equals` (CP650): answer `KEY?` and `KEY=?`
    (default), only `KEY?`, or only `KEY=?`; the other form gets no reply.
+8. `--greet LINE` (repeatable): push LINE to each TCP session as soon as it
+   opens, the way a unit sends a line of its own.
+9. `--require-crlf`: answer `error`, with no echo, to a line that does not end
+   in CR LF, as a real CP650 did (report of 2026-11-19).
 
 ## CI
 

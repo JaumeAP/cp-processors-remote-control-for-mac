@@ -76,7 +76,8 @@ public actor DolbyCP {
                 reconnectBackoff: (initial: Double, max: Double) = (0.1, 2.0), getRetries: Int = 2,
                 gap: Double? = nil) {
         let resolved = port ?? model.defaultPort
-        self.init(transport: TCPTransport(host: host, port: resolved), port: resolved, model: model,
+        self.init(transport: TCPTransport(host: host, port: resolved, lineEnd: WireProtocol.lineEnd(model: model)),
+                  port: resolved, model: model,
                   pollInterval: pollInterval, pollParam: pollParam, watchdog: watchdog,
                   autoReconnect: autoReconnect, reconnectBackoff: reconnectBackoff,
                   getRetries: getRetries, gap: gap)
@@ -89,7 +90,9 @@ public actor DolbyCP {
                                   autoReconnect: Bool = false,
                                   reconnectBackoff: (initial: Double, max: Double) = (0.1, 2.0),
                                   getRetries: Int = 2, gap: Double? = nil) -> DolbyCP {
-        DolbyCP(transport: SerialTransport(device: device, baudrate: baudrate), model: model,
+        DolbyCP(transport: SerialTransport(device: device, baudrate: baudrate,
+                                           lineEnd: WireProtocol.lineEnd(model: model)),
+                model: model,
                 pollInterval: pollInterval, pollParam: pollParam, watchdog: watchdog,
                 autoReconnect: autoReconnect, reconnectBackoff: reconnectBackoff,
                 getRetries: getRetries, gap: gap)

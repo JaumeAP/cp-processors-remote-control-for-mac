@@ -11,7 +11,8 @@ import Network
 ///    it: a writer stays open after the peer's FIN.
 /// 3. `peerClosed()` is true once the peer closed and every received byte has
 ///    been read.
-/// 4. `sendLine` writes "<line>\n" with no validation of the content, and
+/// 4. `sendLine` writes the line and `lineEnd` (LF by default, CR LF for a
+///    CP650) with no validation of the content, and
 ///    fails with `notConnected` without an open link, `notASCII` (nothing
 ///    sent, link kept) for a non-ASCII line, `writeTimedOut` when the peer has
 ///    not taken the bytes within `writeTimeout` (the link stays open), or
@@ -43,10 +44,15 @@ public actor TCPTransport: LineTransport {
     private var dataWaiter: ResumeOnce<Bool>?
     private let networkQueue = DispatchQueue(label: "TCPTransport")
 
+    /// What ends each line sent: LF, or CR LF for a CP650
+    /// (`WireProtocol.lineEnd`).
+    public nonisolated let lineEnd: String
+
     public init(host: String, port: UInt16, connectTimeout: Double = 5.0,
-                writeTimeout: Double = ProtocolTiming.writeTimeout) {
+                writeTimeout: Double = ProtocolTiming.writeTimeout, lineEnd: String = "\n") {
         self.host = host
         self.port = port
+        self.lineEnd = lineEnd
         self.connectTimeout = ProtocolTiming.clamped(connectTimeout)
         self.writeTimeout = ProtocolTiming.clamped(writeTimeout)
     }
@@ -110,7 +116,7 @@ public actor TCPTransport: LineTransport {
     public func sendLine(_ line: String) async throws {
         guard let conn = connection, !failed else { throw Failure.notConnected }
         guard line.unicodeScalars.allSatisfy(\.isASCII) else { throw Failure.notASCII }
-        let data = Data((line + "\n").utf8)
+        let data = Data((line + lineEnd).utf8)
         let timeout = writeTimeout
         let result: Result<Void, Failure> = await withCheckedContinuation { continuation in
             let once = ResumeOnce(continuation)
