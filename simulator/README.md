@@ -66,9 +66,8 @@ Its in-process hooks are exposed on the command line:
 
 ## CI
 
-There is no CI job for the simulator. The macOS build is always done locally,
-on the Mac, never in a macOS CI job: build it with the commands above, then run
-the Swift tests in `macos/` (`swift test`, see `macos/README.md`). They launch
-the simulator themselves, from the binary `$CPSIM_BIN` names (there is no
-default path), so poll(), sockets and ptys are checked on a Mac. Linux is built with the same
-commands; the Swift tests that exercise it run on the Mac.
+The macOS workflow (`.github/workflows/macos.yml`) builds the simulator with
+the commands above and runs the Swift tests in `macos/` with `$CPSIM_BIN` set
+to the binary, so poll(), sockets and ptys are checked on a Mac runner. To run
+them by hand, see `macos/README.md`. Linux is built with the same commands;
+the Swift tests that exercise it run on the Mac.

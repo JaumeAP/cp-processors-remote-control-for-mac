@@ -26,8 +26,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Swift version
         run: swift --version
+      - name: Build the simulator
+        run: cmake -S simulator -B simulator/build && cmake --build simulator/build
       - name: Test
         working-directory: macos
+        env:
+          CPSIM_BIN: ${{ github.workspace }}/simulator/build/processor_sim
         run: swift test
 
   release:
