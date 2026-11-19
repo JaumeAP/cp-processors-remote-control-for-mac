@@ -16,10 +16,10 @@ See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
 
 ## Acknowledgements
 
-Thanks to David Sans, who beta-tested CP Remote on a real CP650 and reported
-the connection problem that version 1.0.11 fixes.
+Thanks to David Sans of Iyuno (Barcelona), who beta-tested CP Remote on a real
+CP650 and reported the connection problem that version 1.0.11 fixes.
 
-Thanks to Pau Burillo for testing the CP750.
+Thanks to Pau Burillo of TransPerfect (Barcelona) for testing the CP750.
 
 The CP850 and CP950 have not yet been tested on real hardware; they have only
 been checked against the simulator. Feedback from anyone who runs CP Remote
