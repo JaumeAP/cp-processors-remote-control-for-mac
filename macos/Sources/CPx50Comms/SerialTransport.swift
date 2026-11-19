@@ -64,13 +64,28 @@ public actor SerialTransport: LineTransport {
 
     public func peerClosed() -> Bool { link != nil && buffer.atEOF && buffer.isEmpty }
 
+    /// Why the last `connect()` failed (the `open` error, a baud rate not
+    /// supported, a directory); nil after a success.
+    private var connectFailure: String?
+
+    public func lastConnectFailure() async -> String? { connectFailure }
+
     public func connect() async -> Bool {
-        guard supportedBauds.contains(baudrate) else { return false }
+        connectFailure = nil
+        guard supportedBauds.contains(baudrate) else {
+            connectFailure = "unsupported baud rate \(baudrate)"
+            return false
+        }
         let fd = Darwin.open(device, O_RDWR | O_NOCTTY | O_NONBLOCK)
-        guard fd >= 0 else { return false }
+        guard fd >= 0 else {
+            let code = errno
+            connectFailure = "open \(device) failed: \(String(cString: strerror(code))) (errno \(code))"
+            return false
+        }
         var info = stat()
         if fstat(fd, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR {
             Darwin.close(fd)
+            connectFailure = "\(device) is a directory"
             return false
         }
         configureRawSerial(fd, baudrate: baudrate)
