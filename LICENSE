@@ -1,12 +1,13 @@
 Copyright (c) 2026 Jaume Puig. All rights reserved.
 
 Permission is granted to anyone to use this software, and the application
-built from it, in whole or in part, for any purpose, free of charge.
+built from it, free of charge, solely to control Dolby CP650, CP750, CP850,
+CP950 and CP950A cinema processors, as described in the README.
 
 All copyright in the code is reserved by the copyright holder. No permission
 is granted to copy, modify, merge, publish, distribute, sublicense, or sell
-any part of this software or its documentation without prior written
-permission from the copyright holder.
+any part of this software or its documentation, or to use it for any other
+purpose, without prior written permission from the copyright holder.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
