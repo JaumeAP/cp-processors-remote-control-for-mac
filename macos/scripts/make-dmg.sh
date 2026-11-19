@@ -13,8 +13,8 @@
 # Open Anyway). The release workflow (.github/workflows/macos.yml) runs this script on a Mac runner.
 set -euo pipefail
 
-VERSION="1.0.17"
-BUNDLE_VERSION="18"
+VERSION="1.0.18"
+BUNDLE_VERSION="19"
 APP_NAME="CPRemote"
 
 here="$(cd "$(dirname "$0")/.." && pwd)"   # the macos/ folder

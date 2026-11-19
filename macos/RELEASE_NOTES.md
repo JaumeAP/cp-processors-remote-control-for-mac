@@ -1,5 +1,11 @@
 # CP Remote release notes
 
+## 1.0.18 (2026-11-19)
+- The window that helps allow CP Remote on the local network now says what applies to the macOS version: from macOS 27.2 it points to the + button of the Local Network list; before that it says to quit and reopen CP Remote from Applications so macOS lists it.
+- The "Move to Applications" message no longer says that macOS ties the permission to where the app is; it says a copy run from the disk image disappears when the image is ejected, and macOS may ask again for permissions.
+- Every GitHub Release now lists how to open the app the first time and the permissions it needs, per macOS version. On macOS 15 and later Control-click, Open no longer works: use System Settings, Privacy & Security, Open Anyway.
+- Everything in 1.0.17 is included.
+
 ## 1.0.17 (2026-11-19)
 - A serial connection that cannot be opened now says why in the connection log (for example `open /dev/cu.usbserial failed: Permission denied (errno 13)`, the port busy or missing, or a baud rate not supported). Before, it said only "connect failed".
 - Everything in 1.0.16 is included.
