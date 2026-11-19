@@ -17,6 +17,9 @@ See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
 CP Remote was created by Jaume Puig (GitHub: [JaumeAP](https://github.com/JaumeAP),
 Instagram: [@jamesapuig](https://www.instagram.com/jamesapuig/)).
 
+It was written from Jaume Puig's 30 years of experience working with Dolby. It
+uses only public documents and manuals, and the processors themselves.
+
 ## Acknowledgements
 
 Thanks to David Sans of Iyuno (Barcelona), who beta-tested CP Remote on a real
