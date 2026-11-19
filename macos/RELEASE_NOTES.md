@@ -1,5 +1,11 @@
 # CP Remote release notes
 
+## 1.0.16 (2026-11-19)
+- When macOS blocks the local network, the connection now waits for the user's answer instead of giving up at once. macOS may deny the first attempt while its own permission alert is still on screen, and connects by itself once access is allowed. Every connection of 1.0.14 on a real Mac failed this way, within 10 ms.
+- When the local network stays blocked, CP Remote opens System Settings on Privacy & Security, Local Network, and shows a small window with the steps to allow it. The window closes by itself when the app connects.
+- When CP Remote runs from the disk image or from the folder it was downloaded to, it asks to be moved to Applications: macOS ties the Local Network permission to where the app is.
+- Everything in 1.0.15 is included.
+
 ## 1.0.15 (2026-11-19)
 - The connection log now says why a connection could not be opened (for example `waiting: … Local network prohibited`, a refused connection, or no answer in time). Before, it said only "connect failed".
 - If every connection fails at once after an update, check that CP Remote is allowed in System Settings, Privacy & Security, Local Network: macOS can ask again for each new version.

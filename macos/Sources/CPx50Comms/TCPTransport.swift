@@ -72,6 +72,7 @@ public actor TCPTransport: LineTransport {
         guard let nwPort = NWEndpoint.Port(rawValue: port) else { return false }
         let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
         let timeout = connectTimeout
+        let denied = DeniedFlag()
         let outcome: String? = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 let once = ResumeOnce<String?>(continuation)
@@ -79,7 +80,17 @@ public actor TCPTransport: LineTransport {
                     switch newState {
                     case .ready: once.resume(nil)
                     case .failed(let error): once.resume("failed: \(error)")
-                    case .waiting(let error): once.resume("waiting: \(error)")
+                    case .waiting(let error):
+                        // Local Network access not (yet) granted: macOS may
+                        // deny at once while its alert is still up, and
+                        // retries the connection by itself once the user
+                        // allows it (TN3179), so keep waiting until the
+                        // timeout instead of giving up.
+                        if case .localNetworkDenied? = conn.currentPath?.unsatisfiedReason {
+                            denied.set()
+                        } else {
+                            once.resume("waiting: \(error)")
+                        }
                     case .cancelled: once.resume("cancelled")
                     default: break
                     }
@@ -87,7 +98,7 @@ public actor TCPTransport: LineTransport {
                 conn.start(queue: networkQueue)
                 once.attach(timeout: Task {
                     try? await Task.sleep(for: .seconds(timeout))
-                    once.resume("no answer within \(timeout) s")
+                    once.resume(denied.isSet ? Self.localNetworkDenied : "no answer within \(timeout) s")
                 })
                 pendingConnect = (conn, once)
             }
@@ -164,8 +175,12 @@ public actor TCPTransport: LineTransport {
     // MARK: - Internals
 
     private var pendingConnect: (conn: NWConnection, once: ResumeOnce<String?>)?
-    /// Why the last connect failed (`waiting: …` is what macOS reports, for
-    /// instance, when Local Network access is denied); nil after a success.
+    /// The reason a connect gives when macOS denied Local Network access
+    /// (System Settings, Privacy & Security, Local Network) for the whole wait.
+    public static let localNetworkDenied = "local network access denied"
+
+    /// Why the last connect failed (`localNetworkDenied`, `failed: …`,
+    /// `waiting: …`, `cancelled` or the timeout); nil after a success.
     private var connectFailure: String?
 
     /// Async like the requirement, so a call on a `TCPTransport` does not
@@ -233,6 +248,16 @@ public actor TCPTransport: LineTransport {
         if case .posix(let code) = error { return code == .ENODATA }
         return false
     }
+}
+
+/// Set from the network queue when a connect waits for Local Network access,
+/// read by its timeout.
+final class DeniedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+
+    func set() { lock.withLock { value = true } }
+    var isSet: Bool { lock.withLock { value } }
 }
 
 /// A continuation that the first of several racers (a completion handler, a
