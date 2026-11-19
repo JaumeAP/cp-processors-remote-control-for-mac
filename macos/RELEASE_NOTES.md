@@ -1,5 +1,18 @@
 # CP Remote release notes
 
+## 1.0.12 (2026-11-19)
+- The app is universal again: it runs on Apple silicon and on Intel Macs. The 1.0.11 disk image held an Apple silicon build only.
+- CP850: a front panel drawn from photos of the unit, with its screen, navigation keys and macro keys 1 to 8. Key n selects macro n (`sys.macro_preset n`), as in the CP850 manual.
+- CP750: the selected format and input keys are shown lit.
+- Booth safety: the controls are enabled only once the fader, the selected format or input and the mute have been read from the unit. A newly chosen unit no longer shows the mute state of the previous one, and the fader sends nothing before its first read.
+- CP850, CP950 and CP950A: two unanswered macro reads pause the macro poll for five polls instead of stopping it for the rest of the session. A macro number and its name always change together, and the list of macros tolerates a late line.
+- CP650: the two-second wait between links counts from every close, including the one after Test. Test uses the main link. A change ignores unrelated lines from the unit, the hung-link watchdog tries both query forms, and the query form switches only after the preferred one has gone unanswered twice in a row.
+- Reconnecting while a link is closing no longer leaves a second link or an orphaned watchdog behind.
+- Serial: the port is closed when the link ends (50 links used to leave 49 open), the default speed is 9600 baud, and an invalid speed fails the connection instead of opening the port.
+- Out-of-range times and retry counts are clamped to a sensible value instead of stopping the app.
+- The connection log is saved when the app quits.
+- Everything in 1.0.11 is included.
+
 ## 1.0.11 (2026-11-18)
 - CP650: a query is sent as `KEY?` again, the form a real unit answered with version 1.0. When it draws no reply, the query is repeated as `KEY=?` (the form of the manual, used since 1.0.6), and whichever form the unit answers is used from then on. With 1.0.6 a CP650 appeared not to answer `KEY=?`: the panel stayed inactive until a key was pressed on the unit, then allowed one change.
 - One exchange left unanswered no longer disables the controls. They are disabled when the link is down, or when a fader read gets no reply through all its retries, and enabled again once the panel has been read.
