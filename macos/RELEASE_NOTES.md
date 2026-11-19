@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.0.17 (2026-11-19)
+- A serial connection that cannot be opened now says why in the connection log (for example `open /dev/cu.usbserial failed: Permission denied (errno 13)`, the port busy or missing, or a baud rate not supported). Before, it said only "connect failed".
+- Everything in 1.0.16 is included.
+
 ## 1.0.16 (2026-11-19)
 - When macOS blocks the local network, the connection now waits for the user's answer instead of giving up at once. macOS may deny the first attempt while its own permission alert is still on screen, and connects by itself once access is allowed. Every connection of 1.0.14 on a real Mac failed this way, within 10 ms.
 - When the local network stays blocked, CP Remote opens System Settings on Privacy & Security, Local Network, and shows a small window with the steps to allow it. The window closes by itself when the app connects.
