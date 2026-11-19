@@ -14,6 +14,8 @@ and macro selection, with the unit's front panel on screen.
 
 See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
 
+CP Remote was created by Jaume Puig (GitHub: [JaumeAP](https://github.com/JaumeAP)).
+
 ## Acknowledgements
 
 Thanks to David Sans of Iyuno (Barcelona), who beta-tested CP Remote on a real
