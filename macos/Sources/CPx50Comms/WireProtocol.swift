@@ -66,6 +66,16 @@ public enum WireProtocol {
         }
     }
 
+    /// What ends each line sent: CR LF on the CP650, whose commands end in
+    /// CR LF (Dolby's CP650 manual; a real unit answered `error` to every
+    /// line that ended in LF alone, report of 2026-11-19), LF on the others.
+    public static func lineEnd(model: ProcessorModel) -> String {
+        switch model {
+        case .cp650: return "\r\n"
+        default: return "\n"
+        }
+    }
+
     /// The query line, without the trailing newline: the first of `queryForms`.
     public static func formatQuery(model: ProcessorModel, param: String) throws(ProtocolError) -> String {
         try queryForms(model: model, param: param)[0]

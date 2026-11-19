@@ -42,9 +42,15 @@ public actor SerialTransport: LineTransport {
 
     /// `baudrate` defaults to 9600, the speed the processors' manuals give;
     /// a rate not in `supportedBauds` makes `connect()` fail.
-    public init(device: String, baudrate: Int = 9600, writeTimeout: Double = ProtocolTiming.writeTimeout) {
+    /// What ends each line sent: LF, or CR LF for a CP650
+    /// (`WireProtocol.lineEnd`).
+    public nonisolated let lineEnd: String
+
+    public init(device: String, baudrate: Int = 9600, writeTimeout: Double = ProtocolTiming.writeTimeout,
+                lineEnd: String = "\n") {
         self.device = device
         self.baudrate = baudrate
+        self.lineEnd = lineEnd
         self.writeTimeout = ProtocolTiming.clamped(writeTimeout)
     }
 
@@ -82,7 +88,7 @@ public actor SerialTransport: LineTransport {
     public func sendLine(_ line: String) async throws {
         guard writerOpen, let current = link else { throw Failure.notConnected }
         guard line.unicodeScalars.allSatisfy(\.isASCII) else { throw Failure.notASCII }
-        let bytes = Array((line + "\n").utf8)
+        let bytes = Array((line + lineEnd).utf8)
         let outcome = await current.write(bytes, timeout: writeTimeout)
         switch outcome {
         case .written:

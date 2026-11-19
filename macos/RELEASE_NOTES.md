@@ -1,5 +1,10 @@
 # CP Remote release notes
 
+## 1.0.14 (2026-11-19)
+- CP650: every line is now sent ending in CR LF, as the CP650 manual gives, over the network and over a serial line. Before, a line ended in LF alone, and a real CP650 answered `error` to every query and change: the panel came alive only after a key or the fader was moved on the unit, and the app kept reopening the link.
+- The other models are unchanged.
+- Everything in 1.0.13 is included.
+
 ## 1.0.13 (2026-11-19)
 - CP650: after the link opens, the app listens for one second before it sends anything, and reads any line the unit sends on its own. Nothing is sent during that second.
 - The CP650 is unchanged otherwise.
