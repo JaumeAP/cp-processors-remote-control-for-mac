@@ -46,10 +46,25 @@ struct CPRemoteApp: App {
         }
     }
 
+    private static let moveToApplicationsMessage = "CP Remote is running from the disk image or from the folder it was downloaded to. macOS may then refuse it the local network. Quit it, drag CP Remote to the Applications folder and open it from there."
+
     var body: some Scene {
         Window("CP Remote", id: "main") {
             FrontPanelView(model: model)
                 .sheet(isPresented: $model.showSetup) { SetupView(model: model) }
+                .onChange(of: model.showLocalNetworkAlert) { _, show in
+                    guard show else { return }
+                    model.showLocalNetworkAlert = false
+                    LocalNetworkHelp.show()
+                }
+                .onChange(of: model.isConnected) { _, connected in
+                    if connected { LocalNetworkHelp.close() }
+                }
+                .alert("Move CP Remote to Applications", isPresented: $model.showMoveToApplicationsAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(Self.moveToApplicationsMessage)
+                }
                 .task {
                     NSApplication.shared.activate()
                     await model.connect()   // with no address saved, opens Setup

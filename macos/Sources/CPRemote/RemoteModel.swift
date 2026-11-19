@@ -71,6 +71,34 @@ final class RemoteModel: ObservableObject {
         didSet { defaults.set(host, forKey: Self.hostKey) }
     }
     @Published var showSetup = false
+    /// macOS blocked the connection: CP Remote is not allowed in System
+    /// Settings, Privacy & Security, Local Network. Shown once per launch.
+    @Published var showLocalNetworkAlert = false
+    private var localNetworkAlertShown = false
+    /// The app runs from the disk image or from a translocated copy (opened
+    /// in place from Downloads): macOS ties the Local Network permission to
+    /// where the app is, so it should be in Applications.
+    @Published var showMoveToApplicationsAlert = RemoteModel.runsOutsideApplications(Bundle.main.bundlePath)
+
+    /// True for a bundle path on a mounted disk image or under App
+    /// Translocation's randomized read-only copy.
+    nonisolated static func runsOutsideApplications(_ path: String) -> Bool {
+        path.contains("/AppTranslocation/") || path.hasPrefix("/Volumes/")
+    }
+
+    /// System Settings, Privacy & Security, Local Network.
+    static let localNetworkSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!
+
+    /// After a failed connect: ask for the Local Network permission when
+    /// macOS was what blocked it.
+    private func checkLocalNetwork(_ cp: DolbyCP) async {
+        guard !localNetworkAlertShown,
+              await cp.lastConnectFailure() == TCPTransport.localNetworkDenied,
+              processor === cp else { return }
+        localNetworkAlertShown = true
+        note("local network access denied: asking the user to allow it")
+        showLocalNetworkAlert = true
+    }
     /// The processor model: its front panel, its wire names and its controls.
     /// The fader and mute are live on every model; the front-panel buttons
     /// follow the model's profile (the CP750's inputs, the CP650's formats).
@@ -449,7 +477,10 @@ final class RemoteModel: ObservableObject {
         let ok = await cp.connect()
         guard processor === cp else { return }
         apply(status: await cp.status)
-        if !ok { note("no answer from \(address) at connect: the poll retries") }
+        if !ok {
+            note("no answer from \(address) at connect: the poll retries")
+            await checkLocalNetwork(cp)
+        }
         startPolling(cp)
     }
 
@@ -461,9 +492,10 @@ final class RemoteModel: ObservableObject {
         panelRead = false
         formatListDue = true
         resetMacroReads()
-        _ = await cp.reconnect()
+        let ok = await cp.reconnect()
         guard processor === cp else { return }
         apply(status: await cp.status)
+        if !ok { await checkLocalNetwork(cp) }
     }
 
     private func disconnectNow() async {
@@ -573,6 +605,7 @@ final class RemoteModel: ObservableObject {
             // meanwhile is kept, not closed and opened again.
             let ok = await cp.connect()
             note("reconnect \(ok ? "succeeded" : "failed")")
+            if !ok, isCurrent(cp) { await checkLocalNetwork(cp) }
             guard isCurrent(cp), ok else { return }
             formatListDue = true
             resetMacroReads()

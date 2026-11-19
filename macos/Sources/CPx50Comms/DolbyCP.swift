@@ -220,6 +220,11 @@ public actor DolbyCP {
         if wasUp { lastClose = .now }
     }
 
+    /// Why the last connect or reopen failed, from the transport
+    /// (`TCPTransport.localNetworkDenied` when macOS blocked it); nil after
+    /// a success or when the transport does not say.
+    public func lastConnectFailure() async -> String? { await transport.lastConnectFailure() }
+
     /// "succeeded", or "failed" with the transport's reason when it gives one.
     private func outcomeText(_ ok: Bool) async -> String {
         if ok { return "succeeded" }
