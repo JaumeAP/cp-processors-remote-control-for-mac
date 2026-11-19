@@ -1,0 +1,60 @@
+name: macOS
+
+# Tests on every push to main and every pull request. A release is built and
+# published by running this workflow by hand with the version (it must be the
+# VERSION in macos/scripts/make-dmg.sh and the first entry of
+# macos/RELEASE_NOTES.md), or by pushing a v<version> tag.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, for example 1.0.17 (empty: only test)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Test
+        working-directory: macos
+        run: swift test
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version
+        id: v
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then version="${GITHUB_REF_NAME#v}"; else version="${{ inputs.version }}"; fi
+          script="$(sed -n 's/^VERSION="\(.*\)"/\1/p' macos/scripts/make-dmg.sh)"
+          [ "$version" = "$script" ] || { echo "version $version differs from make-dmg.sh $script" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build the disk image
+        run: macos/scripts/make-dmg.sh "$RUNNER_TEMP/dist"
+      - name: Check the disk image
+        run: macos/scripts/check-dmg.sh "$RUNNER_TEMP/dist/CPRemote-${{ steps.v.outputs.version }}.dmg" "${{ steps.v.outputs.version }}"
+      - name: Release notes of this version
+        run: |
+          awk -v h="## ${{ steps.v.outputs.version }} " 'index($0,h)==1{f=1;next} /^## /{f=0} f' macos/RELEASE_NOTES.md > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.v.outputs.version }}"
+          gh release create "v$v" "$RUNNER_TEMP/dist/CPRemote-$v.dmg" "$RUNNER_TEMP/dist/CPRemote.dmg" \
+            --title "CP Remote $v" --notes-file "$RUNNER_TEMP/notes.md" --target "$GITHUB_SHA"
