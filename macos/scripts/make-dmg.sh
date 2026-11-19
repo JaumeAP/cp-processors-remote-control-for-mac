@@ -10,7 +10,7 @@
 # The bundle (with the hardened runtime) and the disk image are ad-hoc signed
 # (no Developer ID, not notarized): on another Mac, Gatekeeper warns the first
 # time it opens (on macOS 15 and later, System Settings, Privacy & Security,
-# Open Anyway). Run on the Mac itself: macOS builds are always done locally.
+# Open Anyway). The release workflow (.github/workflows/macos.yml) runs this script on a Mac runner.
 set -euo pipefail
 
 VERSION="1.0.17"
