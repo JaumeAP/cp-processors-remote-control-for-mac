@@ -386,6 +386,9 @@ final class RemoteModel: ObservableObject {
     /// The CP650 takes one connection: after closing a link, give it this
     /// long to drop the old session before the next one opens.
     static let cp650ReopenPause = 2.0
+    /// Seconds the CP650 link is only listened to after it opens, before the
+    /// first command: lines the unit pushes are read, nothing is sent.
+    static let cp650ListenWindow = 1.0
 
     /// When this app last closed a CP650 session to each address and port:
     /// the main link, a Test link. Shared by every model object of the app.
@@ -412,7 +415,10 @@ final class RemoteModel: ObservableObject {
             return
         }
         let cp = DolbyCP(host: address, port: port, model: processorModel, autoReconnect: true)
-        if processorModel == .cp650 { await cp.setReopenPause(reopenPause) }
+        if processorModel == .cp650 {
+            await cp.setReopenPause(reopenPause)
+            await cp.setListenWindow(RemoteModel.cp650ListenWindow)
+        }
         note("connect to \(address) as \(processorModel.rawValue)")
         if let log { await cp.setEventLog { line in log.write("link: \(line)") } }
         processor = cp
