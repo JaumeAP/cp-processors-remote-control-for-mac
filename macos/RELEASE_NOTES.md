@@ -1,5 +1,10 @@
 # CP Remote release notes
 
+## 1.0.15 (2026-11-19)
+- The connection log now says why a connection could not be opened (for example `waiting: … Local network prohibited`, a refused connection, or no answer in time). Before, it said only "connect failed".
+- If every connection fails at once after an update, check that CP Remote is allowed in System Settings, Privacy & Security, Local Network: macOS can ask again for each new version.
+- Everything in 1.0.14 is included.
+
 ## 1.0.14 (2026-11-19)
 - CP650: every line is now sent ending in CR LF, as the CP650 manual gives, over the network and over a serial line. Before, a line ended in LF alone, and a real CP650 answered `error` to every query and change: the panel came alive only after a key or the fader was moved on the unit, and the app kept reopening the link.
 - The other models are unchanged.

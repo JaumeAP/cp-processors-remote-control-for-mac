@@ -72,20 +72,22 @@ public actor TCPTransport: LineTransport {
         guard let nwPort = NWEndpoint.Port(rawValue: port) else { return false }
         let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: .tcp)
         let timeout = connectTimeout
-        let ready: Bool = await withTaskCancellationHandler {
+        let outcome: String? = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
-                let once = ResumeOnce(continuation)
+                let once = ResumeOnce<String?>(continuation)
                 conn.stateUpdateHandler = { newState in
                     switch newState {
-                    case .ready: once.resume(true)
-                    case .failed, .waiting, .cancelled: once.resume(false)
+                    case .ready: once.resume(nil)
+                    case .failed(let error): once.resume("failed: \(error)")
+                    case .waiting(let error): once.resume("waiting: \(error)")
+                    case .cancelled: once.resume("cancelled")
                     default: break
                     }
                 }
                 conn.start(queue: networkQueue)
                 once.attach(timeout: Task {
                     try? await Task.sleep(for: .seconds(timeout))
-                    once.resume(false)
+                    once.resume("no answer within \(timeout) s")
                 })
                 pendingConnect = (conn, once)
             }
@@ -93,7 +95,8 @@ public actor TCPTransport: LineTransport {
             Task { await self.cancelPendingConnect() }
         }
         if pendingConnect?.conn === conn { pendingConnect = nil }
-        guard ready else {
+        connectFailure = outcome
+        guard outcome == nil else {
             conn.stateUpdateHandler = nil
             conn.cancel()
             return false
@@ -160,10 +163,17 @@ public actor TCPTransport: LineTransport {
 
     // MARK: - Internals
 
-    private var pendingConnect: (conn: NWConnection, once: ResumeOnce<Bool>)?
+    private var pendingConnect: (conn: NWConnection, once: ResumeOnce<String?>)?
+    /// Why the last connect failed (`waiting: …` is what macOS reports, for
+    /// instance, when Local Network access is denied); nil after a success.
+    private var connectFailure: String?
+
+    /// Async like the requirement, so a call on a `TCPTransport` does not
+    /// pick the protocol's default instead.
+    public func lastConnectFailure() async -> String? { connectFailure }
 
     private func cancelPendingConnect() {
-        pendingConnect?.once.resume(false)
+        pendingConnect?.once.resume("cancelled")
     }
 
     /// Wait until bytes, end of stream or an error arrive; false on timeout
