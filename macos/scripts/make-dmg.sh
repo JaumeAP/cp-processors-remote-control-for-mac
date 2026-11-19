@@ -13,8 +13,8 @@
 # Open Anyway). Run on the Mac itself: macOS builds are always done locally.
 set -euo pipefail
 
-VERSION="1.0.12"
-BUNDLE_VERSION="13"
+VERSION="1.0.13"
+BUNDLE_VERSION="14"
 APP_NAME="CPRemote"
 
 here="$(cd "$(dirname "$0")/.." && pwd)"   # the macos/ folder

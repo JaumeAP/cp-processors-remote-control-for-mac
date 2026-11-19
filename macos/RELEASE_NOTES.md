@@ -1,5 +1,10 @@
 # CP Remote release notes
 
+## 1.0.13 (2026-11-19)
+- CP650: after the link opens, the app listens for one second before it sends anything, and reads any line the unit sends on its own. Nothing is sent during that second.
+- The CP650 is unchanged otherwise.
+- Everything in 1.0.12 is included.
+
 ## 1.0.12 (2026-11-19)
 - The app is universal again: it runs on Apple silicon and on Intel Macs. The 1.0.11 disk image held an Apple silicon build only.
 - CP850: a front panel drawn from photos of the unit, with its screen, navigation keys and macro keys 1 to 8. Key n selects macro n (`sys.macro_preset n`), as in the CP850 manual.
