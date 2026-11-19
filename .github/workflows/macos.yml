@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Swift version
@@ -33,7 +33,7 @@ jobs:
   release:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Version
