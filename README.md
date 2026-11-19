@@ -27,3 +27,6 @@ on one of them is welcome.
 
 Licence: free use to control the processors listed above; all copyright in the
 code is reserved. See [`LICENSE`](LICENSE).
+
+This project is not affiliated with, endorsed by, or sponsored by Dolby
+Laboratories. Dolby is a trademark of Dolby Laboratories.
