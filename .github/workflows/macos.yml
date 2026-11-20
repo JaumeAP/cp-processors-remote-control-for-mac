@@ -15,12 +15,18 @@ on:
         description: "Version to release, for example 1.0.17 (empty: only test)"
         required: false
         type: string
+      mutation:
+        description: "Run the mutation tests instead of the normal tests"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   test:
+    if: ${{ !inputs.mutation }}
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
@@ -64,3 +70,35 @@ jobs:
           v="${{ steps.v.outputs.version }}"
           gh release create "v$v" "$RUNNER_TEMP/dist/CPRemote-$v.dmg" "$RUNNER_TEMP/dist/CPRemote.dmg" \
             --title "CP Remote $v" --notes-file "$RUNNER_TEMP/notes.md" --target "$GITHUB_SHA"
+
+  # Mutation testing (macos/scripts/mutate.py): change one operator at a time
+  # in the sources and see whether the tests notice. Only the tests that need
+  # no simulator run, so each mutant takes under a minute. Survivors are listed
+  # in the job summary.
+  mutation:
+    if: ${{ inputs.mutation }}
+    runs-on: macos-26
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: framing
+            files: "Sources/CPx50Comms/LineBuffer.swift Sources/CPx50Comms/CommandQueue.swift Sources/CPx50Comms/ProtocolTiming.swift"
+            max: 40
+          - name: wire
+            files: "Sources/CPx50Comms/WireProtocol.swift"
+            max: 40
+          - name: serial
+            files: "Sources/CPx50Comms/SerialTransport.swift"
+            max: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mutate ${{ matrix.name }}
+        working-directory: macos
+        run: python3 scripts/mutate.py --max ${{ matrix.max }} --out "$RUNNER_TEMP/mutation" ${{ matrix.files }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-${{ matrix.name }}
+          path: ${{ runner.temp }}/mutation

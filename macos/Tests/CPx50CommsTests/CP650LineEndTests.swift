@@ -13,7 +13,8 @@ struct CP650LineEndTests {
         #expect(WireProtocol.lineEnd(model: model) == "\n")
     }
 
-    @Test func aUnitThatNeedsCRLFAnswersQueriesAndChanges() async throws {
+    @Test(.enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+    func aUnitThatNeedsCRLFAnswersQueriesAndChanges() async throws {
         let sim = try await Simulator(extraArguments: ["--require-crlf", "--seed", "fader_level=63"])
         defer { sim.stop() }
         let cp = fastClient(sim.port)
@@ -30,7 +31,8 @@ struct CP650LineEndTests {
         await cp.disconnect()
     }
 
-    @Test func aLineEndedInLFAloneIsAnsweredError() async throws {
+    @Test(.enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
+    func aLineEndedInLFAloneIsAnsweredError() async throws {
         let sim = try await Simulator(extraArguments: ["--require-crlf"])
         defer { sim.stop() }
         let transport = TCPTransport(host: "127.0.0.1", port: sim.port)
