@@ -124,7 +124,17 @@ elif other_swift >/dev/null; then
     log "using $(other_swift)"
     exit 0
 else
-    install_toolchain
+    mkdir -p "$home_dir"
+    # The wrappers first, so a `swift` typed while the download runs finds one.
+    if [ "$make_wrappers" = 1 ]; then
+        write_wrapper swift
+        write_wrapper swiftc
+    fi
+    # One install at a time: a second caller (a wrapper, or the hook again)
+    # waits here, then finds the toolchain ready.
+    exec 9> "$home_dir/.install.lock"
+    flock 9
+    swift_ok "$home_dir/current/usr/bin/swift" || install_toolchain
 fi
 
 if [ "$make_wrappers" = 1 ]; then
