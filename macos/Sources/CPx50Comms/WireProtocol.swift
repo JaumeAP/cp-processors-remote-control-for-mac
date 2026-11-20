@@ -141,7 +141,7 @@ public enum WireProtocol {
 
     /// Splits text into lines: breaks on LF, CR, CRLF, VT, FF, FS, GS, RS, NEL,
     /// LINE SEPARATOR and PARAGRAPH SEPARATOR; no trailing empty line.
-    private static func splitLines(_ s: [Unicode.Scalar]) -> [[Unicode.Scalar]] {
+    static func splitLines(_ s: [Unicode.Scalar]) -> [[Unicode.Scalar]] {
         var lines: [[Unicode.Scalar]] = []
         var current: [Unicode.Scalar] = []
         var i = 0

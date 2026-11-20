@@ -127,3 +127,21 @@ import Testing
         }
     }
 }
+
+/// How a reply is cut into lines: CR LF is one break, CR alone and LF alone
+/// are one each, and two breaks in a row leave an empty line between.
+@Suite struct SplitLinesTests {
+    private func lines(_ text: String) -> [String] {
+        WireProtocol.splitLines(Array(text.unicodeScalars)).map { String(String.UnicodeScalarView($0)) }
+    }
+
+    @Test func everyLineEndingBreaksTheLineOnce() {
+        #expect(lines("a\r\nb") == ["a", "b"])
+        #expect(lines("a\rb") == ["a", "b"])
+        #expect(lines("a\nb") == ["a", "b"])
+        #expect(lines("a\n\nb") == ["a", "", "b"])
+        #expect(lines("a\r\n\r\nb") == ["a", "", "b"])
+        #expect(lines("a\n") == ["a"])
+        #expect(lines("a\r\n") == ["a"])
+    }
+}

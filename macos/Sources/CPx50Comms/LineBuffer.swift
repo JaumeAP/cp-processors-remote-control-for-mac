@@ -45,7 +45,7 @@ struct LineBuffer {
     mutating func read() -> Read {
         if discardingRest {
             guard let newline = bytes.firstIndex(of: 0x0A) else {
-                bytes.removeAll(keepingCapacity: true)
+                bytes.removeAll()
                 return atEOF ? .done(nil) : .needMore
             }
             bytes.removeSubrange(...newline)
@@ -61,7 +61,7 @@ struct LineBuffer {
             return .done(Self.decode(line))
         }
         if bytes.count > limit {
-            bytes.removeAll(keepingCapacity: true)
+            bytes.removeAll()
             discardingRest = true
             return .done(nil)
         }
