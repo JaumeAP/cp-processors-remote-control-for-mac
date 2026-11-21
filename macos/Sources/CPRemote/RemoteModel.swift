@@ -173,7 +173,7 @@ final class RemoteModel: ObservableObject {
     private var announcedConnected = false
 
     /// Where the IP address is kept, and the TCP port (nil: the CP650's
-    /// 61412). Both are injectable so tests use their own and a simulator.
+    /// 61412). Both are injectable so tests use their own.
     private let defaults: UserDefaults
     let port: UInt16?
 

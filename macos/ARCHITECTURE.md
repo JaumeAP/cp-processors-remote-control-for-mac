@@ -1,13 +1,11 @@
 # Architecture
 
-## The three parts
+## The two parts
 
 1. **`CPx50Comms`** (library): the control channel of the processors. It has
    no user interface and no knowledge of the app.
 2. **`CPRemote`** (app): the window, the front panels and the Setup sheet.
    It owns one `DolbyCP` client and reads the processor's state through it.
-3. **`simulator/`** (C++17): a stand-in for the processor's control channel,
-   used by the tests.
 
 ## The library
 

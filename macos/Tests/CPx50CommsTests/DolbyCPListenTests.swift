@@ -79,19 +79,3 @@ private actor ListenTransport: LineTransport {
         await cp.disconnect()
     }
 }
-
-/// The C++ simulator with `--greet`: a line it pushes as soon as the session
-/// opens is read in the listen window, before the client has sent anything.
-@Suite(.serialized, .enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
-struct DolbyCPListenSimulatorTests {
-    @Test func aPushedLineIsReadBeforeTheFirstCommand() async throws {
-        let sim = try await Simulator(extraArguments: ["--greet", "fader_level=12.5"])
-        defer { sim.stop() }
-        let cp = fastClient(sim.port)
-        await cp.setListenWindow(0.5)
-        #expect(await cp.connect())
-        #expect(sim.received().isEmpty)
-        #expect(await known(cp, "fader_level") == "12.5")
-        await cp.disconnect()
-    }
-}

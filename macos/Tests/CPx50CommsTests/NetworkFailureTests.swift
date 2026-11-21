@@ -74,17 +74,4 @@ private final class Listener: @unchecked Sendable {
         #expect(ContinuousClock.now - started < .seconds(2), "the cancelled connect waited for its timeout")
         #expect(await !transport.isConnected())
     }
-
-    /// getList on a link the peer closed returns nil and marks it missing.
-    @Test(.enabled(if: simulatorPath != nil, "needs CPSIM_BIN (the simulator)"))
-    func getListOnADeadLinkReturnsNil() async throws {
-        let sim = try await Simulator()
-        let cp = DolbyCP(host: "127.0.0.1", port: sim.port, model: .cp850, gap: 0.05)
-        #expect(await cp.connect())
-        sim.stop()
-        #expect(await eventually { await !cp.isLinkUp })
-        #expect(try await cp.getList("sys.macros", timeout: 0.3) == nil)
-        #expect(await cp.status == .missing)
-        await cp.disconnect()
-    }
 }

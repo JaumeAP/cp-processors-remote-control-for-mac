@@ -9,12 +9,11 @@ CP950's front and commands).
 
 ## Status
 
-1. Tested against the simulator in `simulator/` (every control, every model).
-2. Version 1.0 was reported working on a real CP650: it connects over Ethernet
+1. Version 1.0 was reported working on a real CP650: it connects over Ethernet
    and the fader, mute and format buttons work. One report is open: after
    losing the link the app can stay inactive until the unit itself is touched.
    See "Connection log" below. Other models are not tested on real hardware.
-3. The CP850 has no front-panel figure in the manuals used here; its front
+2. The CP850 has no front-panel figure in the manuals used here; its front
    is the CP950's.
 
 ## Requirements
@@ -49,20 +48,14 @@ If the link to a processor misbehaves, send that file.
 
 ## Tests
 
-The tests that need a processor use the simulator. Build it, then point
-`CPSIM_BIN` at the binary:
-
-From the repository root:
+From `macos/`:
 
 ```bash
-cmake -S simulator -B simulator/build && cmake --build simulator/build
-cd macos
-CPSIM_BIN=$PWD/../simulator/build/processor_sim \
-  swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
+swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
 ```
 
-Without `CPSIM_BIN` those tests are skipped. The simulator tests start and stop
-the simulator themselves.
+The tests need no processor: they use scripted transports and loopback
+listeners.
 
 ## Layout
 
@@ -72,8 +65,7 @@ the simulator themselves.
    transports, the wire protocol, and the command queue. See `ARCHITECTURE.md`.
 3. `Tests/` — the library and app tests.
    `RELEASE_NOTES.md` — the changes of every version.
-4. `simulator/` — a C++17 simulator of the processors' control channel.
-5. `scripts/make-dmg.sh` — builds the release app and its disk image.
+4. `scripts/make-dmg.sh` — builds the release app and its disk image.
 
 ## Using the library
 

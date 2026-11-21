@@ -18,7 +18,7 @@ let package = Package(
             name: "CPRemote",
             dependencies: ["CPx50Comms"]
         ),
-        // The app's model driven against the simulator, stress included.
+        // The app's model: persistence, rendering, the connection log.
         .testTarget(
             name: "CPRemoteTests",
             dependencies: ["CPRemote", "CPx50Comms"]
