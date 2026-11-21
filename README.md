@@ -1,15 +1,17 @@
 # CP Remote
 
-A macOS app and its control library for Dolby cinema processors: CP650, CP750,
-CP850, CP950 and CP950A, over TCP/IP.
+A macOS app for Dolby cinema processors: CP650, CP750, CP850, CP950 and
+CP950A.
 
 In recording and post-production studios the processor usually sits in the
-machine room, away from the mix room. CP Remote lets an engineer in the mix
-room control it over the local network: the fader, mute, front-panel buttons
-and macro selection, with the unit's front panel on screen.
+machine room, away from the mix room. CP Remote shows the unit's front panel
+on screen: the fader, mute, front-panel buttons and macro selection.
 
-[`macos/`](macos/README.md) holds the app (`CPRemote`) and the library
-(`CPx50Comms`). See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
+The app is currently interface-only: it has no processor communication, so it
+connects to nothing and its controls stay disabled.
+
+[`macos/`](macos/README.md) holds the app (`CPRemote`). See
+[`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
 
 CP Remote was created by Jaume Puig (GitHub: [JaumeAP](https://github.com/JaumeAP),
 Instagram: [@jamesapuig](https://www.instagram.com/jamesapuig/)).

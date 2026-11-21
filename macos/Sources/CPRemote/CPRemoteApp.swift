@@ -52,14 +52,6 @@ struct CPRemoteApp: App {
         Window("CP Remote", id: "main") {
             FrontPanelView(model: model)
                 .sheet(isPresented: $model.showSetup) { SetupView(model: model) }
-                .onChange(of: model.showLocalNetworkAlert) { _, show in
-                    guard show else { return }
-                    model.showLocalNetworkAlert = false
-                    LocalNetworkHelp.show()
-                }
-                .onChange(of: model.isConnected) { _, connected in
-                    if connected { LocalNetworkHelp.close() }
-                }
                 .alert("Move CP Remote to Applications", isPresented: $model.showMoveToApplicationsAlert) {
                     Button("OK", role: .cancel) {}
                 } message: {

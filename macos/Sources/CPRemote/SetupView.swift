@@ -1,7 +1,6 @@
 // The Setup sheet: the processor model and IP address, and a Test button
-// that reports whether the processor chosen here answered at that address.
+// (this build has no processor communication, so it only says so).
 
-import CPx50Comms
 import SwiftUI
 
 struct SetupView: View {

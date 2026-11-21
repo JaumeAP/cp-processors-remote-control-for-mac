@@ -1,25 +1,21 @@
-// The app's live state: one DolbyCP link to the CP650 at the configured
-// address, the fader level, the selected format button and the mute flag.
+// The app's state: the configured address and processor model, the fader
+// level, the selected front-panel button, the mute flag and the macros. This
+// build has no processor communication: nothing connects, so the controls
+// stay disabled.
 
-import CPx50Comms
 import Foundation
 import SwiftUI
 
-/// The parameter names one processor model uses on its front panel, as its
-/// manual gives them: CP650 `fader_level`, `mute`, `format_button`; CP750
-/// `cp750.sys.fader`, `cp750.sys.mute`, `cp750.sys.input_mode`; CP950
-/// `sys.fader`, `sys.mute` (its front has no input buttons; its macros are
-/// `sys.macro_preset`, not on this panel).
+/// What one processor model's front panel offers: its input buttons (CP750
+/// only), the fader's lowest value, and whether it has macros (CP850 / CP950 /
+/// CP950A).
 struct PanelProfile {
-    let fader: String
-    let mute: String
-    /// Input selection: the value each front button sends, in button order
-    /// (CP750 only).
+    /// Input selection: one entry per front button, in button order (CP750
+    /// only).
     let inputs: [String]?
-    /// Lowest value the fader takes on the wire, in tenths (CP950: 1 to 100).
+    /// Lowest value the fader takes, in tenths (CP950: 1 to 100).
     let faderMinimum: Int
-    /// The parameter that names the selected macro, shown on the screen
-    /// (CP850 / CP950 / CP950A).
+    /// The panel shows the selected macro's name (CP850 / CP950 / CP950A).
     var macroName: String? = nil
 }
 
@@ -27,14 +23,12 @@ extension ProcessorModel {
     var panel: PanelProfile {
         switch self {
         case .cp650:
-            PanelProfile(fader: "fader_level", mute: "mute", inputs: nil, faderMinimum: 0)
+            PanelProfile(inputs: nil, faderMinimum: 0)
         case .cp750:
-            PanelProfile(fader: "cp750.sys.fader", mute: "cp750.sys.mute",
-                         inputs: ["dig_1", "dig_2", "dig_3", "dig_4", "analog", "non_sync", "mic"],
+            PanelProfile(inputs: ["dig_1", "dig_2", "dig_3", "dig_4", "analog", "non_sync", "mic"],
                          faderMinimum: 0)
         case .cp850, .cp950, .cp950a:
-            PanelProfile(fader: "sys.fader", mute: "sys.mute", inputs: nil, faderMinimum: 1,
-                         macroName: "sys.macro_name")
+            PanelProfile(inputs: nil, faderMinimum: 1, macroName: "sys.macro_name")
         }
     }
 }
@@ -44,42 +38,24 @@ final class RemoteModel: ObservableObject {
     /// The generic silkscreen on the eight format buttons (CP650 user's
     /// manual, figure 2-1); fixed, whatever formats are programmed.
     static let buttonSilkscreen = ["01", "04", "05", "10", "11", "U1", "U2", "NS"]
-    /// The fader runs 0.0 to 10.0; the wire carries tenths (`70` is 7.0).
+    /// The fader runs 0.0 to 10.0.
     static let faderRange: ClosedRange<Double> = 0...10
     /// The knob is an endless encoder: three full turns run the fader from
     /// 0.0 to 10.0, so one degree is 1/108 of a unit. It has no end stops:
     /// past 0.0 or 10.0 it keeps turning and the fader stays at the limit.
     static let degreesPerUnit = 3 * 360 / (faderRange.upperBound - faderRange.lowerBound)
-    /// How long a control changed here is shielded from poll replies: a reply
-    /// read since shortly before the change may predate it on the processor.
-    private static let pollHoldOff: Duration = .milliseconds(1500)
-    /// Unanswered fader reads in a row after which a link that is still open
-    /// is closed and opened again (a hung control session).
-    private static let silentPollLimit = 2
-    /// How long a SET may wait for its reply. The client's default, 0.5 s, is
-    /// too short for a real unit: a mute fades and a format change reconfigures
-    /// it, and a reply slower than the timeout is taken as a lost link, which
-    /// disables the controls for seconds.
-    private static let setReplyTimeout: Double = 3
     private static let hostKey = "processorHost"
     private static let modelKey = "processorModel"
     /// The models the Setup menu offers. The CP950 choice covers the CP950A
-    /// (one front, one protocol).
+    /// (one front).
     static let choices: [ProcessorModel] = [.cp650, .cp750, .cp850, .cp950]
 
     @Published var host: String {
         didSet { defaults.set(host, forKey: Self.hostKey) }
     }
     @Published var showSetup = false
-    /// macOS blocked the connection: CP Remote is not allowed in System
-    /// Settings, Privacy & Security, Local Network. Shown once per launch.
-    @Published var showLocalNetworkAlert = false
-    private var localNetworkAlertShown = false
     /// The app runs from the disk image or from a translocated copy (opened
-    /// in place from Downloads): it should be in Applications. Whether macOS
-    /// ties the Local Network permission to the path is not documented (it
-    /// tracks the code signature and the executable's UUID), so the alert
-    /// does not promise it.
+    /// in place from Downloads): it should be in Applications.
     @Published var showMoveToApplicationsAlert = RemoteModel.runsOutsideApplications(Bundle.main.bundlePath)
 
     /// True for a bundle path on a mounted disk image or under App
@@ -88,64 +64,27 @@ final class RemoteModel: ObservableObject {
         path.contains("/AppTranslocation/") || path.hasPrefix("/Volumes/")
     }
 
-    /// System Settings, Privacy & Security, Local Network.
-    static let localNetworkSettings = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!
-
-    /// After a failed connect: ask for the Local Network permission when
-    /// macOS was what blocked it.
-    private func checkLocalNetwork(_ cp: DolbyCP) async {
-        guard !localNetworkAlertShown,
-              await cp.lastConnectFailure() == TCPTransport.localNetworkDenied,
-              processor === cp else { return }
-        localNetworkAlertShown = true
-        note("local network access denied: asking the user to allow it")
-        showLocalNetworkAlert = true
-    }
-    /// The processor model: its front panel, its wire names and its controls.
-    /// The fader and mute are live on every model; the front-panel buttons
-    /// follow the model's profile (the CP750's inputs, the CP650's formats).
+    /// The processor model: its front panel and its controls.
     @Published private(set) var processorModel: ProcessorModel
     @Published private(set) var fader: Double = 7.0
     @Published private(set) var formatButton: Int?
-    /// The format number programmed on each button, from the processor's
-    /// `format_list`; nil until it reports eight entries.
+    /// The format number programmed on each button; nil until known.
     @Published private(set) var programmedFormats: [String]?
-    /// The selected macro's name, read from the processor (CP850 / CP950 / CP950A).
+    /// The selected macro's name (CP850 / CP950 / CP950A).
     @Published private(set) var macroName: String?
     @Published private(set) var macroPreset: Int?
     /// The macros the processor offers, in its order (CP850 / CP950 / CP950A).
     @Published private(set) var macros: [Macro]?
-    /// Unanswered macro reads in a row; at `macroMissLimit` the macro reads
-    /// pause for `macroPausePolls` polls (each miss costs a read timeout),
-    /// then are tried again. Any answered macro read clears it.
-    private var macroMisses = 0
-    private var macroPollsToSkip = 0
-    private static let macroMissLimit = 2
-    private static let macroPausePolls = 5
-    /// Reads of the macro list left on this link: it is read until one
-    /// succeeds (a stale line before its header fails a read), at most
-    /// `macroListTries` times, so a unit without the list is not asked forever.
-    private var macroListTriesLeft = RemoteModel.macroListTries
-    private static let macroListTries = 3
-    /// The macro number `macroName` belongs to; nil when no name is known.
-    private var macroNameNumber: Int?
 
     struct Macro: Equatable, Sendable {
         let number: Int
         let name: String
     }
 
-    static let macroPresetParam = "sys.macro_preset"
-    static let macroListParam = "sys.macros"
-
     /// Show the level in decibels (7.0 is 0 dB) instead of the fader number.
     @Published private(set) var levelInDecibels = false
     private static let decibelsKey = "levelInDecibels"
     @Published private(set) var muted = false
-    @Published private(set) var status: ProcessorStatus = .missing
-    /// The fader has been read on the current link. Until then the controls
-    /// stay disabled, so a first touch never starts from a stale level.
-    @Published private(set) var panelRead = false
     /// The knob's drawn rotation, in degrees, free of the fader's limits.
     @Published private(set) var knobRotation: Double = 0
 
@@ -153,122 +92,66 @@ final class RemoteModel: ObservableObject {
     private var knobValue: Double?
     var isTurningKnob: Bool { knobValue != nil }
 
-    private var processor: DolbyCP?
-    /// The address `processor` was built for.
-    private var processorHost: String?
-    private var statusTask: Task<Void, Never>?
-    private var pollTask: Task<Void, Never>?
-    /// The tail of the connect/reconnect/disconnect chain: each waits for the
-    /// one before, so two of them never interleave.
-    private var lifecycle: Task<Void, Never>?
-    private var pendingFader: Int?
-    private var faderInFlight = false
-    /// When each control was last changed here.
-    private var localChange: [String: ContinuousClock.Instant] = [:]
-    /// `format_list` is read once per opened link.
-    private var formatListDue = true
-    private var silentPolls = 0
-    /// Hung links reopened (for tests).
-    private(set) var linkReopens = 0
-    private var announcedConnected = false
-
-    /// Where the IP address is kept, and the TCP port (nil: the CP650's
-    /// 61412). Both are injectable so tests use their own.
+    /// Where the IP address is kept. Injectable so tests use their own.
     private let defaults: UserDefaults
-    let port: UInt16?
 
-    /// Where the app and its link write their events; nil for none (tests).
+    /// Where the app writes its events; nil for none (tests).
     private let log: ConnectionLog?
 
-    /// The CP650's reopen pause, `cp650ReopenPause` unless a test sets it.
-    let reopenPause: Double
-
-    init(defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared,
-         reopenPause: Double = RemoteModel.cp650ReopenPause) {
+    init(defaults: UserDefaults = .standard, log: ConnectionLog? = .shared) {
         self.defaults = defaults
-        self.port = port
         self.log = log
-        self.reopenPause = reopenPause
         host = defaults.string(forKey: Self.hostKey) ?? ""
         levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
         processorModel = defaults.string(forKey: Self.modelKey)
-            .flatMap { try? ProcessorModel(name: $0) } ?? .cp650
+            .flatMap { ProcessorModel(rawValue: $0) } ?? .cp650
     }
 
-    /// Choose the processor model and remember it. Takes effect at connect.
+    /// Choose the processor model and remember it.
     func choose(_ model: ProcessorModel) {
         processorModel = model
         defaults.set(model.rawValue, forKey: Self.modelKey)
     }
 
-    /// No fader value waiting to be handed to the client or being handed.
-    var faderIsSettled: Bool { pendingFader == nil && !faderInFlight }
-
-    /// The controls work: a link with the panel read on it. One exchange
-    /// without a reply does not disable them; a link that is down, or a fader
-    /// read unanswered through all its retries, does (`markUnread`).
-    var isConnected: Bool { processor != nil && panelRead }
+    /// The controls work only on a connected processor. This build has no
+    /// processor communication, so it is never connected.
+    var isConnected: Bool { false }
 
     private var trimmedHost: String { host.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     // MARK: - Connection
 
-    /// Drop any link and open a fresh one to `host`.
-    func connect() async { await serialized { await self.connectNow() } }
+    /// With no address saved, open Setup. Otherwise nothing connects: this
+    /// build has no processor communication.
+    func connect() async {
+        guard !trimmedHost.isEmpty else {
+            showSetup = true
+            return
+        }
+        note("connect to \(trimmedHost) as \(processorModel.rawValue): no processor communication in this build")
+    }
 
-    /// Reopen the current link, keeping its queued commands, when it is to
-    /// the same address; otherwise a fresh connect.
-    func reconnect() async { await serialized { await self.reconnectNow() } }
+    func reconnect() async { await connect() }
 
-    func disconnect() async { await serialized { await self.disconnectNow() } }
+    func disconnect() async { endKnobTurn() }
 
-    /// Check the processor at `address`, as `chosen` (the model picked in
-    /// Setup, not yet saved; the saved one when nil). When the main link is up
-    /// to that address and model, ask over it (the CP650 serves one control
-    /// client); otherwise open a short-lived second link.
+    /// The Setup sheet's Test button. This build has no processor
+    /// communication, so it only says so.
     func test(address raw: String, model chosen: ProcessorModel? = nil) async -> String {
         let address = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !address.isEmpty else { return "Type an IP address first." }
-        let model = chosen ?? processorModel
-        let name = Self.choiceName(model)
-        let port = self.port ?? model.defaultPort
-        // A main link to that address, in any state (up, reopening, hung), is
-        // asked: a second session to a CP650 would block the main one.
-        if let cp = processor, processorHost == address, cp.model == model {
-            guard let level = Self.faderLevel(try? await cp.get(model.panel.fader)) else {
-                return "Connected to \(address), but no fader reply."
-            }
-            return "OK: the connected \(name) at \(address) answered, fader \(Self.faderText(level))."
-        }
-        let cp = DolbyCP(host: address, port: port, model: model)
-        await pauseAfterClose(address, port, model: model)
-        guard await cp.connect() else {
-            await cp.disconnect()
-            return "No connection to \(address) on port \(port)."
-        }
-        let reply = try? await cp.get(model.panel.fader)
-        await cp.disconnect()
-        Self.closed(address, port, model: model)
-        guard let level = Self.faderLevel(reply) else {
-            return "Connected to \(address):\(port), but no fader reply."
-        }
-        return "OK: the \(name) at \(address) answered, fader \(Self.faderText(level))."
+        let name = Self.choiceName(chosen ?? processorModel)
+        return "Not tested: this version of CP Remote does not communicate with the \(name)."
     }
 
     // MARK: - Controls
 
-    /// Move the fader. Only once the panel has been read on the current link:
-    /// a change before then would start from the previous level (another
-    /// unit's, after a switch) and be sent as soon as the link is up.
+    /// Move the fader. Only on a connected processor.
     func setFader(_ value: Double) {
         guard value.isFinite, isConnected else { return }
         let clamped = Self.clampFader(value)
         let tenths = max(Int((clamped * 10).rounded()), processorModel.panel.faderMinimum)
-        guard Double(tenths) / 10 != fader || pendingFader != nil else { return }
         fader = Double(tenths) / 10
-        localChange[processorModel.panel.fader] = .now
-        pendingFader = tenths
-        pumpFader()
     }
 
     func beginKnobTurn() { knobValue = fader }
@@ -295,34 +178,20 @@ final class RemoteModel: ObservableObject {
     /// Put the fader on the reference level (the Level menu).
     func setReference() { setFader(Self.referenceLevel) }
 
-    /// A front-panel button: the CP650's format buttons (`format_button`), or
-    /// the CP750's input buttons (`cp750.sys.input_mode`).
+    /// A front-panel button: the CP650's format buttons, or the CP750's input
+    /// buttons.
     func pressButton(_ button: Int) {
-        guard let cp = processor, isConnected else { return }
+        guard isConnected else { return }
         // A key the front does not have selects nothing: CP750 inputs 1 to 7,
         // CP650 formats 1 to 8.
         let keys = processorModel.panel.inputs?.count ?? RemoteModel.buttonSilkscreen.count
         guard (1...keys).contains(button) else { return }
         formatButton = button
-        if let inputs = processorModel.panel.inputs {
-            localChange[Self.inputParam] = .now
-            let value = inputs[button - 1]
-            Task { _ = try? await cp.set(Self.inputParam, .string(value), timeout: Self.setReplyTimeout) }
-        } else {
-            localChange["format_button"] = .now
-            // The panel counts the buttons 1 to 8; the CP650 counts them 0 to 7.
-            Task { _ = try? await cp.set("format_button", .int(button - 1), timeout: Self.setReplyTimeout) }
-        }
     }
 
-    static let inputParam = "cp750.sys.input_mode"
-
     func toggleMute() {
-        guard let cp = processor, isConnected else { return }
+        guard isConnected else { return }
         muted.toggle()
-        localChange[processorModel.panel.mute] = .now
-        let value = muted ? 1 : 0
-        Task { _ = try? await cp.set(processorModel.panel.mute, .int(value), timeout: Self.setReplyTimeout) }
     }
 
     static func faderText(_ value: Double) -> String { String(format: "%.1f", value) }
@@ -353,16 +222,9 @@ final class RemoteModel: ObservableObject {
 
     /// Select a macro of the processor (CP850 / CP950 / CP950A).
     func selectMacro(_ number: Int) {
-        guard let cp = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
+        guard isConnected, processorModel.panel.macroName != nil else { return }
         macroPreset = number
-        // The new macro's name from the list; unknown, it is blank until the
-        // poll reads it (the poll asks whenever the name shown is not the
-        // selected macro's: `macroNameNumber`).
         macroName = macros?.first(where: { $0.number == number })?.name
-        macroNameNumber = macroName == nil ? nil : number
-        localChange[Self.macroPresetParam] = .now
-        localChange[nameParam] = .now
-        Task { _ = try? await cp.set(Self.macroPresetParam, .int(number), timeout: Self.setReplyTimeout) }
     }
 
     /// The next (or previous) macro in the processor's list, wrapping round.
@@ -396,388 +258,12 @@ final class RemoteModel: ObservableObject {
         return programmedFormats?[button - 1]
     }
 
-    // MARK: - Lifecycle (serialized)
-
-    private func serialized(_ operation: @escaping @MainActor @Sendable () async -> Void) async {
-        let previous = lifecycle
-        let task = Task { @MainActor in
-            await previous?.value
-            await operation()
-        }
-        lifecycle = task
-        await task.value
-    }
-
     /// One line in the connection log.
     private func note(_ text: String) {
         log?.write("app: \(text)")
     }
 
-    /// The CP650 takes one connection: after closing a link, give it this
-    /// long to drop the old session before the next one opens.
-    static let cp650ReopenPause = 2.0
-    /// Seconds the CP650 link is only listened to after it opens, before the
-    /// first command: lines the unit pushes are read, nothing is sent.
-    static let cp650ListenWindow = 1.0
-
-    /// When this app last closed a CP650 session to each address and port:
-    /// the main link, a Test link. Shared by every model object of the app.
-    private static var cp650Closes: [String: ContinuousClock.Instant] = [:]
-
-    /// Note that a session to `address` was just closed (CP650 only).
-    private static func closed(_ address: String, _ port: UInt16, model: ProcessorModel) {
-        if model == .cp650 { cp650Closes["\(address):\(port)"] = .now }
-    }
-
-    /// Wait out what is left of the CP650's reopen pause since this app last
-    /// closed a session to `address`.
-    private func pauseAfterClose(_ address: String, _ port: UInt16, model: ProcessorModel) async {
-        guard model == .cp650, let closed = Self.cp650Closes["\(address):\(port)"] else { return }
-        let left = closed + .seconds(reopenPause) - .now
-        if left > .zero { try? await Task.sleep(for: left) }
-    }
-
-    private func connectNow() async {
-        await disconnectNow()
-        let address = trimmedHost
-        guard !address.isEmpty else {
-            showSetup = true
-            return
-        }
-        let cp = DolbyCP(host: address, port: port, model: processorModel, autoReconnect: true)
-        if processorModel == .cp650 {
-            await cp.setReopenPause(reopenPause)
-            await cp.setListenWindow(RemoteModel.cp650ListenWindow)
-        }
-        note("connect to \(address) as \(processorModel.rawValue)")
-        if let log { await cp.setEventLog { line in log.write("link: \(line)") } }
-        processor = cp
-        processorHost = address
-        localChange = [:]
-        formatListDue = true
-        resetMacroReads()
-        silentPolls = 0
-        macroName = nil
-        macroNameNumber = nil
-        macroPreset = nil
-        macros = nil
-        // A new processor: nothing shown may be the previous unit's.
-        muted = false
-        formatButton = nil
-        programmedFormats = nil
-        panelRead = false
-        statusTask = Task { [weak self] in
-            for await value in cp.statusUpdates {
-                guard let self, self.processor === cp else { return }
-                self.apply(status: value)
-            }
-        }
-        // A CP650 session this app closed a moment ago (the main link, a
-        // Test link) may still hold the unit's one connection.
-        await pauseAfterClose(address, port ?? processorModel.defaultPort, model: processorModel)
-        guard processor === cp else { return }
-        let ok = await cp.connect()
-        guard processor === cp else { return }
-        apply(status: await cp.status)
-        if !ok {
-            note("no answer from \(address) at connect: the poll retries")
-            await checkLocalNetwork(cp)
-        }
-        startPolling(cp)
-    }
-
-    private func reconnectNow() async {
-        guard let cp = processor, processorHost == trimmedHost, cp.model == processorModel else {
-            return await connectNow()
-        }
-        note("reconnect requested")
-        panelRead = false
-        formatListDue = true
-        resetMacroReads()
-        let ok = await cp.reconnect()
-        guard processor === cp else { return }
-        apply(status: await cp.status)
-        if !ok { await checkLocalNetwork(cp) }
-    }
-
-    private func disconnectNow() async {
-        pollTask?.cancel()
-        statusTask?.cancel()
-        pollTask = nil
-        statusTask = nil
-        pendingFader = nil
-        endKnobTurn()
-        guard let cp = processor else { return }
-        note("disconnect requested")
-        let closedHost = processorHost
-        processor = nil
-        processorHost = nil
-        programmedFormats = nil
-        macroName = nil
-        macroNameNumber = nil
-        macroPreset = nil
-        macros = nil
-        panelRead = false
-        apply(status: .missing)
-        await cp.disconnect()
-        if let closedHost, let closedPort = cp.port { Self.closed(closedHost, closedPort, model: cp.model) }
-    }
-
-    /// Record a status change. A status other than ok disables the controls
-    /// only when the link turns out to be down: a single unanswered exchange
-    /// leaves them usable (the CP650 can miss a reply, and a unit pushes
-    /// lines of its own when its keys are pressed).
-    private func apply(status value: ProcessorStatus) {
-        note("status \(value), panel read \(panelRead)")
-        status = value
-        announceConnectionChange()
-        guard value != .ok, panelRead, let cp = processor else { return }
-        Task { [weak self] in
-            let up = await cp.isLinkUp
-            guard let self, self.processor === cp, !up else { return }
-            self.markUnread("link is down")
-        }
-    }
-
-    /// Disable the controls until the panel has been read again on the
-    /// current link, end a knob turn, and tell VoiceOver.
-    private func markUnread(_ why: String) {
-        endKnobTurn()
-        guard panelRead else { return }
-        panelRead = false
-        note("controls disabled: \(why)")
-        announceConnectionChange()
-    }
-
-    private func announceConnectionChange() {
-        guard isConnected != announcedConnected else { return }
-        announcedConnected = isConnected
-        let text = isConnected ? "Processor connected" : "Processor not answering; controls disabled"
-        AccessibilityNotification.Announcement(text).post()
-    }
-
-    // MARK: - Fader hand-off
-
-    /// Hand the latest fader value to the client, one hand-off at a time, so
-    /// the SETs reach its queue in the order they were made (the queue then
-    /// coalesces them to the newest).
-    private func pumpFader() {
-        guard isConnected else {
-            pendingFader = nil          // the panel is unread: never send a level from before
-            return
-        }
-        guard !faderInFlight, let value = pendingFader, let cp = processor else { return }
-        pendingFader = nil
-        faderInFlight = true
-        Task {
-            _ = try? await cp.set(processorModel.panel.fader, .int(value), timeout: Self.setReplyTimeout)
-            faderInFlight = false
-            pumpFader()
-        }
-    }
-
-    // MARK: - Polling
-
-    private func startPolling(_ cp: DolbyCP) {
-        pollTask = Task { [weak self] in
-            // Read at once, then every two seconds; connect() does not wait
-            // for it, so a link that never answers still shows its state.
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.pollCycle(cp)
-                try? await Task.sleep(for: .seconds(2))
-            }
-        }
-    }
-
-    private func isCurrent(_ cp: DolbyCP) -> Bool { processor === cp && !Task.isCancelled }
-
-    private func pollCycle(_ cp: DolbyCP) async {
-        guard isCurrent(cp) else { return }
-        let linkIsUp = await cp.isLinkUp
-        // The app may have disconnected while the client was asked.
-        guard isCurrent(cp) else { return }
-        if !linkIsUp {
-            // The client's own watchdog runs only after a successful
-            // connect: retry here, so a processor that was off, booting or
-            // unreachable at connect time is found when it comes up.
-            note("link is down: reconnecting")
-            markUnread("link is down")
-            // connect(), not reconnect(): a link another path reopened
-            // meanwhile is kept, not closed and opened again.
-            let ok = await cp.connect()
-            note("reconnect \(ok ? "succeeded" : "failed")")
-            if !ok, isCurrent(cp) { await checkLocalNetwork(cp) }
-            guard isCurrent(cp), ok else { return }
-            formatListDue = true
-            resetMacroReads()
-        }
-        await refresh(cp)
-    }
-
-    /// A new or reopened link: the macro number, name and list are read
-    /// again, whatever went unanswered on the old one.
-    private func resetMacroReads() {
-        macroListTriesLeft = Self.macroListTries
-        macroMisses = 0
-        macroPollsToSkip = 0
-    }
-
-    /// One macro read went unanswered.
-    private func macroReadMissed() {
-        macroMisses += 1
-        guard macroMisses >= Self.macroMissLimit else { return }
-        note("macro reads unanswered: paused for \(Self.macroPausePolls) polls")
-        macroMisses = 0
-        macroPollsToSkip = Self.macroPausePolls
-    }
-
-    /// A reply to a read that started at `start` may update the panel only
-    /// if no SET of that control is queued or being sent, and the control was
-    /// not changed here since just before the read. The change time is read
-    /// after the client hops, so a change made during them counts.
-    private func mayApply(_ param: String, readStartedAt start: ContinuousClock.Instant,
-                          on cp: DolbyCP) async -> Bool {
-        if await cp.pendingSets.contains(where: { $0.param == param }) { return false }
-        if await cp.inflightSet?.param == param { return false }
-        if let changed = localChange[param], changed > start - Self.pollHoldOff { return false }
-        return true
-    }
-
-    private func refresh(_ cp: DolbyCP) async {
-        let panel = processorModel.panel
-        var start = ContinuousClock.now
-        let faderReply = try? await cp.get(panel.fader)
-        guard isCurrent(cp) else { return }
-        guard let faderReply else {
-            // Unanswered: after a few in a row, reopen a link that is open
-            // but hung, and skip the other reads (each would time out too).
-            silentPolls += 1
-            note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit))")
-            markUnread("fader read unanswered")
-            if silentPolls >= Self.silentPollLimit {
-                note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
-                silentPolls = 0
-                formatListDue = true
-                resetMacroReads()
-                linkReopens += 1
-                _ = await cp.reconnect()
-            }
-            return
-        }
-        silentPolls = 0
-        let faderRead = Self.faderLevel(faderReply)
-        if let level = faderRead, await mayApply(panel.fader, readStartedAt: start, on: cp), isCurrent(cp),
-           !isTurningKnob, faderIsSettled, fader != level {
-            fader = level
-        }
-
-        // The selected button: the CP650's format button, or the CP750's input.
-        start = .now
-        if processorModel == .cp650 {
-            if let reply = try? await cp.get("format_button"), isCurrent(cp),
-               let wireValue = Int(reply), (0...7).contains(wireValue),
-               await mayApply("format_button", readStartedAt: start, on: cp), isCurrent(cp),
-               formatButton != wireValue + 1 {
-                formatButton = wireValue + 1
-            }
-        } else if panel.inputs != nil, let reply = try? await cp.get(Self.inputParam), isCurrent(cp),
-                  let index = panel.inputs?.firstIndex(of: reply),
-                  await mayApply(Self.inputParam, readStartedAt: start, on: cp), isCurrent(cp),
-                  formatButton != index + 1 {
-            formatButton = index + 1
-        }
-
-        start = .now
-        let muteReply = try? await cp.get(panel.mute)
-        guard isCurrent(cp) else { return }
-        if let muteReply, await mayApply(panel.mute, readStartedAt: start, on: cp), isCurrent(cp),
-           muted != (muteReply == "1") {
-            muted = muteReply == "1"
-        }
-        // The controls come on only once this pass has read the fader, the
-        // selection and the mute: enabled earlier, they showed the previous
-        // state, and a Mute pressed then sent the opposite of what was meant.
-        if faderRead != nil, muteReply != nil, isCurrent(cp), !panelRead {
-            panelRead = true
-            note("panel read: controls enabled")
-            announceConnectionChange()
-        }
-
-        // The selected macro, for the screen: its number every poll, its name
-        // whenever the name shown is not that macro's, the list until it is
-        // read. Unanswered reads pause these reads for a few polls
-        // (`macroReadMissed`); a reply held back because the macro was just
-        // changed here is not a miss.
-        if panel.macroName != nil, macroPollsToSkip > 0 { macroPollsToSkip -= 1 }
-        if let nameParam = panel.macroName, macroPollsToSkip == 0, isCurrent(cp) {
-            start = .now
-            let presetReply = try? await cp.get(Self.macroPresetParam)
-            guard isCurrent(cp) else { return }
-            if let presetReply {
-                macroMisses = 0
-                if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
-                   await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp), isCurrent(cp) {
-                    if macroNameNumber == number {
-                        macroPreset = number
-                    } else {
-                        // The number and its name change together: a new key
-                        // is never shown beside the old macro's name.
-                        start = .now
-                        let nameReply = try? await cp.get(nameParam)
-                        guard isCurrent(cp) else { return }
-                        if let nameReply {
-                            if await mayApply(nameParam, readStartedAt: start, on: cp), isCurrent(cp),
-                               await mayApply(Self.macroPresetParam, readStartedAt: start, on: cp) {
-                                macroPreset = number
-                                macroName = nameReply.trimmingCharacters(in: .whitespaces)
-                                macroNameNumber = number
-                            }
-                        } else {
-                            macroReadMissed()
-                            macroPreset = number          // the number without a name, not the old name
-                            macroName = macros?.first { $0.number == number }?.name
-                            macroNameNumber = macroName == nil ? nil : number
-                        }
-                    }
-                }
-            } else {
-                macroReadMissed()
-            }
-            if macroListTriesLeft > 0, macroPollsToSkip == 0, isCurrent(cp) {
-                macroListTriesLeft -= 1
-                if let lines = try? await cp.getList(Self.macroListParam), isCurrent(cp) {
-                    macroListTriesLeft = 0
-                    let parsed: [Macro] = lines.compactMap { line in
-                        guard let colon = line.firstIndex(of: ":"),
-                              let number = Int(line[..<colon].trimmingCharacters(in: .whitespaces)) else { return nil }
-                        let name = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-                        return name.isEmpty ? nil : Macro(number: number, name: name)
-                    }
-                    macros = parsed.isEmpty ? nil : parsed
-                }
-            }
-        }
-
-        // The CP650's programmed formats change only in setup: one attempt
-        // per opened link, so a processor that never answers it is not asked
-        // again.
-        guard processorModel == .cp650, formatListDue, isCurrent(cp) else { return }
-        formatListDue = false
-        if let reply = try? await cp.get("format_list"), isCurrent(cp) {
-            let labels = reply.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-            if labels.count == 8, labels.allSatisfy({ !$0.isEmpty }) { programmedFormats = labels }
-        }
-    }
-
     // MARK: - Values
-
-    /// A fader reply in tenths as a level, held within 0.0 to 10.0; nil when
-    /// it is not a finite number (`nan`, `inf`, text).
-    static func faderLevel(_ reply: String?) -> Double? {
-        guard let reply, let tenths = Double(reply), tenths.isFinite else { return nil }
-        return clampFader(tenths / 10)
-    }
 
     private static func clampFader(_ value: Double) -> Double {
         min(max((value * 10).rounded() / 10, faderRange.lowerBound), faderRange.upperBound)
