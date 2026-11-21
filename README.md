@@ -8,11 +8,8 @@ machine room, away from the mix room. CP Remote lets an engineer in the mix
 room control it over the local network: the fader, mute, front-panel buttons
 and macro selection, with the unit's front panel on screen.
 
-1. [`macos/`](macos/README.md): the app (`CPRemote`) and the library (`CPx50Comms`).
-2. [`simulator/`](simulator/README.md): a C++17 simulator of the processors'
-   control channel, used by the tests.
-
-See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
+[`macos/`](macos/README.md) holds the app (`CPRemote`) and the library
+(`CPx50Comms`). See [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.
 
 CP Remote was created by Jaume Puig (GitHub: [JaumeAP](https://github.com/JaumeAP),
 Instagram: [@jamesapuig](https://www.instagram.com/jamesapuig/)).
@@ -27,9 +24,8 @@ CP650 and reported the connection problem that version 1.0.11 fixes.
 
 Thanks to Pau Burillo of TransPerfect (Barcelona) for testing the CP750.
 
-The CP850 and CP950 have not yet been tested on real hardware; they have only
-been checked against the simulator. Feedback from anyone who runs CP Remote
-on one of them is welcome.
+The CP850 and CP950 have not yet been tested on real hardware. Feedback from
+anyone who runs CP Remote on one of them is welcome.
 
 Licence: free use to control the processors listed above; all copyright in the
 code is reserved. See [`LICENSE`](LICENSE).

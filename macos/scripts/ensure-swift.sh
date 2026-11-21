@@ -14,8 +14,8 @@
 #      never in the home folder. Prints "local" and exits 0. The Swift on
 #      Linux builds only the logic of CPx50Comms that does not touch Darwin,
 #      Network or SwiftUI (LineBuffer, CommandQueue, WireProtocol,
-#      ProtocolTiming, ProcessorModel, ProcessorState); the app, the
-#      transports and the simulator tests need a Mac, locally or in CI.
+#      ProtocolTiming, ProcessorModel, ProcessorState); the app and the
+#      transports need a Mac, locally or in CI.
 #
 # In a Claude Code session ($CLAUDE_ENV_FILE set), a scratchpad toolchain's
 # bin folder is added to PATH for the rest of the session. Nothing is written
