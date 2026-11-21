@@ -21,3 +21,20 @@ On Linux without a system Swift 6, the script downloads Swift 6.3.3 into
 PATH for the session. The app is SwiftUI and AppKit, so it builds and runs
 only on a Mac, locally or in CI. It is currently interface-only: it has no
 processor communication.
+
+## CPSeries: a read-only submodule
+
+`CPSeries/` is the private repository `JaumeAP/CPSeries`, included as a git
+submodule for reference only. It is read-only from this repository:
+
+1. Read it, never change it: no edits, no commits, no branches and no pushes
+   inside `CPSeries/`, and no pull requests or other GitHub writes on
+   `JaumeAP/CPSeries`, unless the user explicitly authorizes that action.
+2. The only change made from here is moving the pinned commit, and only when
+   the user asks: `git submodule update --remote CPSeries`, then commit the
+   new pointer in this repository.
+3. After a fresh clone (`git submodule update --init CPSeries`), disable its
+   push URL: `git -C CPSeries remote set-url --push origin "no-push: CPSeries is read-only here"`.
+
+CPSeries is private, so only accounts with access to it can initialise the
+submodule; everyone else gets an empty `CPSeries/` folder.
