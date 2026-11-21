@@ -1,18 +1,16 @@
 # CP Remote
 
-A native macOS app, written in Swift, that controls Dolby cinema processors
-over TCP/IP. It shows the front panel of the processor you choose and drives
-its fader, mute and front-panel buttons.
+A native macOS app, written in Swift, that shows the front panel of the Dolby
+cinema processor you choose: its fader, mute and front-panel buttons.
 
 Supported processors: CP650, CP750, and CP850 / CP950 (the CP950A shares the
-CP950's front and commands).
+CP950's front).
 
 ## Status
 
-1. Version 1.0 was reported working on a real CP650: it connects over Ethernet
-   and the fader, mute and format buttons work. One report is open: after
-   losing the link the app can stay inactive until the unit itself is touched.
-   See "Connection log" below. Other models are not tested on real hardware.
+1. The app is currently interface-only: it has no processor communication.
+   It connects to nothing, the controls stay disabled, and Setup's Test button
+   only says so.
 2. The CP850 has no front-panel figure in the manuals used here; its front
    is the CP950's.
 
@@ -34,17 +32,14 @@ The image also holds `Release Notes.pdf`, the changes of every version, made
 from `RELEASE_NOTES.md`: add the new version's entry at the top of that file
 before building (the build stops if the newest entry is not the version being
 built).
-The app is ad-hoc signed and not notarized. How to open it the first time,
-and the permissions it needs on each macOS version, are in `INSTALL.md`; the
-release workflow adds that text to every GitHub Release.
+The app is ad-hoc signed and not notarized. How to open it the first time is
+in `INSTALL.md`; the release workflow adds that text to every GitHub Release.
 
 ## Connection log
 
-The app writes what it and its link to the processor do to
-`~/Library/Logs/CP Remote/connection.log`: the lines sent and received, status
-changes with their reason, timeouts, reconnects, and the app's focus and window
-events. It rotates at 1 MB. **Setup, Show Connection Log** reveals the file.
-If the link to a processor misbehaves, send that file.
+The app writes its events to `~/Library/Logs/CP Remote/connection.log`: its
+start, connect requests, and its focus and window events. It rotates at 1 MB.
+**Setup, Show Connection Log** reveals the file.
 
 ## Tests
 
@@ -54,33 +49,15 @@ From `macos/`:
 swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
 ```
 
-The tests need no processor: they use scripted transports and loopback
-listeners.
+The tests need no processor.
 
 ## Layout
 
 1. `Sources/CPRemote/` — the app: the window, the panels, the Setup sheet,
-   and the model that connects them to the processor.
-2. `Sources/CPx50Comms/` — the control library: the client, the TCP and serial
-   transports, the wire protocol, and the command queue. See `ARCHITECTURE.md`.
-3. `Tests/` — the library and app tests.
+   and the model they show. See `ARCHITECTURE.md`.
+2. `Tests/` — the app tests.
    `RELEASE_NOTES.md` — the changes of every version.
-4. `scripts/make-dmg.sh` — builds the release app and its disk image.
-
-## Using the library
-
-```swift
-import CPx50Comms
-
-let cp = DolbyCP(host: "192.168.1.10", model: .cp650)
-guard await cp.connect() else { return }
-try await cp.set("fader_level", 70)                 // queued; returns at once
-let mute = try await cp.get("mute")                 // "0", or nil on no reply
-await cp.disconnect()
-```
-
-The library has no user interface. It uses Foundation, Network.framework for
-TCP, and the POSIX terminal API for serial links.
+3. `scripts/make-dmg.sh` — builds the release app and its disk image.
 
 ## Licence
 

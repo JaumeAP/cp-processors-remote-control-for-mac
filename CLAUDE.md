@@ -18,7 +18,6 @@ runs:
 
 On Linux without a system Swift 6, the script downloads Swift 6.3.3 into
 `$SWIFT_SCRATCH_DIR/swift-6.3.3`, never into the home folder, and adds it to
-PATH for the session. The Swift on Linux builds only the logic of
-`CPx50Comms` that needs no Darwin, Network or SwiftUI (`LineBuffer`,
-`CommandQueue`, `WireProtocol`, `ProtocolTiming`, `ProcessorModel`,
-`ProcessorState`); the app and the transports need a Mac, locally or in CI.
+PATH for the session. The app is SwiftUI and AppKit, so it builds and runs
+only on a Mac, locally or in CI. It is currently interface-only: it has no
+processor communication.

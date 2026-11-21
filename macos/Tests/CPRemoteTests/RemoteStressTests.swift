@@ -2,7 +2,6 @@
 // remembers, how its fronts draw, its connection log and its level unit.
 
 import AppKit
-import CPx50Comms
 import Foundation
 import SwiftUI
 import Testing

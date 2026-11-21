@@ -10,7 +10,6 @@
 // fader and mute (on its screen) and its macro list. The lamps, the menu and
 // navigation keys, the power key and the booth knob are drawn but do nothing.
 
-import CPx50Comms
 import SwiftUI
 
 /// The panel's size, for placing elements by their centre as fractions.

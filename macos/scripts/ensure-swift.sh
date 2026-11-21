@@ -11,11 +11,8 @@
 #   2. On Linux: a system Swift on PATH at version 6 or newer. If there is
 #      none, Swift $SWIFT_VERSION is downloaded from download.swift.org and
 #      unpacked in the session scratchpad, $SWIFT_SCRATCH_DIR/swift-<version>,
-#      never in the home folder. Prints "local" and exits 0. The Swift on
-#      Linux builds only the logic of CPx50Comms that does not touch Darwin,
-#      Network or SwiftUI (LineBuffer, CommandQueue, WireProtocol,
-#      ProtocolTiming, ProcessorModel, ProcessorState); the app and the
-#      transports need a Mac, locally or in CI.
+#      never in the home folder. Prints "local" and exits 0. The app is
+#      SwiftUI and AppKit, so it builds only on a Mac, locally or in CI.
 #
 # In a Claude Code session ($CLAUDE_ENV_FILE set), a scratchpad toolchain's
 # bin folder is added to PATH for the rest of the session. Nothing is written
