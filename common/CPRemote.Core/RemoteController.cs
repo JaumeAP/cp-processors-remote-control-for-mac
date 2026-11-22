@@ -135,6 +135,9 @@ public sealed class RemoteController : ObservableModel, IDisposable
         _model = settings.TryGetValue(ModelKey, out string? model) ? ProcessorModels.Parse(model) ?? ProcessorModel.Cp650 : ProcessorModel.Cp650;
     }
 
+    /// <summary>Raised when a setting that is kept between runs changes: the address, the model or the level unit.</summary>
+    public event EventHandler? SettingsChanged;
+
     /// <summary>The address typed in Setup.</summary>
     public string Host
     {
@@ -143,7 +146,9 @@ public sealed class RemoteController : ObservableModel, IDisposable
         {
             lock (_sync)
             {
-                if (Set(ref _host, value)) _settings[HostKey] = value;
+                if (!Set(ref _host, value)) return;
+                _settings[HostKey] = value;
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -303,6 +308,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
         {
             Model = model;
             _settings[ModelKey] = model.WireName();
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -499,6 +505,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
         {
             LevelInDecibels = !LevelInDecibels;
             _settings[DecibelsKey] = LevelInDecibels ? "true" : "false";
+            SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 

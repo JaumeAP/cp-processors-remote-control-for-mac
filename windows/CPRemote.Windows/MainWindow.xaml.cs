@@ -24,12 +24,15 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // The settings live in memory for now; saving them is the next step.
+        // Settings are read at start and written whenever the address, the model or the level unit changes.
+        string settingsPath = SettingsFile.DefaultPath;
+        Dictionary<string, string> settings = SettingsFile.Load(settingsPath);
         _controller = new RemoteController(
-            new Dictionary<string, string>(),
+            settings,
             log: ConnectionLog.Shared,
             announce: text => Dispatch(() => StatusText.Text = text),
             dispatch: Dispatch);
+        _controller.SettingsChanged += (_, _) => _ = SettingsFile.Save(settingsPath, settings);
         _controller.PropertyChanged += OnControllerChanged;
 
         ShowPanel();
