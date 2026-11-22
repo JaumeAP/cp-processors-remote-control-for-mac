@@ -171,21 +171,21 @@ public sealed class RemoteController : ObservableModel, IDisposable
     public double Fader
     {
         get { lock (_sync) return _fader; }
-        private set { lock (_sync) Set(ref _fader, value); }
+        private set { lock (_sync) { if (Set(ref _fader, value)) RaiseDerived(); } }
     }
 
     /// <summary>The selected front-panel button (1 to 8 on the CP650, 1 to 7 inputs on the CP750).</summary>
     public int? FormatButton
     {
         get { lock (_sync) return _formatButton; }
-        private set { lock (_sync) Set(ref _formatButton, value); }
+        private set { lock (_sync) { if (Set(ref _formatButton, value)) RaiseDerived(); } }
     }
 
     /// <summary>The format number programmed on each button; null until the processor reports eight entries.</summary>
     public IReadOnlyList<string>? ProgrammedFormats
     {
         get { lock (_sync) return _programmedFormats; }
-        private set { lock (_sync) Set(ref _programmedFormats, value); }
+        private set { lock (_sync) { if (Set(ref _programmedFormats, value)) RaiseDerived(); } }
     }
 
     /// <summary>The selected macro's name, read from the processor (CP850 / CP950 / CP950A).</summary>
@@ -216,7 +216,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
     public bool LevelInDecibels
     {
         get { lock (_sync) return _levelInDecibels; }
-        private set { lock (_sync) Set(ref _levelInDecibels, value); }
+        private set { lock (_sync) { if (Set(ref _levelInDecibels, value)) RaiseDerived(); } }
     }
 
     /// <summary>The mute state, as the processor last reported it (or as this app set it).</summary>
@@ -233,7 +233,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
     public bool PanelRead
     {
         get { lock (_sync) return _panelRead; }
-        private set { lock (_sync) Set(ref _panelRead, value); }
+        private set { lock (_sync) { if (Set(ref _panelRead, value)) RaiseDerived(); } }
     }
 
     /// <summary>The knob's drawn rotation, in degrees, free of the fader's limits.</summary>
@@ -413,6 +413,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
             Fader = tenths / 10.0;
             _localChange[Model.Panel().Fader] = Now();
             _pendingFader = tenths;
+            RaiseDerived();
         }
 
         PumpFader();
@@ -420,12 +421,12 @@ public sealed class RemoteController : ObservableModel, IDisposable
 
     public void BeginKnobTurn()
     {
-        lock (_sync) _knobValue = Fader;
+        lock (_sync) { _knobValue = Fader; RaiseDerived(); }
     }
 
     public void EndKnobTurn()
     {
-        lock (_sync) _knobValue = null;
+        lock (_sync) { _knobValue = null; RaiseDerived(); }
     }
 
     /// <summary>Turns the knob by <paramref name="degrees"/> (clockwise positive) and moves the fader by degrees / <see cref="DegreesPerUnit"/>, held within 0.0 to 10.0.</summary>
@@ -602,6 +603,18 @@ public sealed class RemoteController : ObservableModel, IDisposable
 
     private static long Now() => Stopwatch.GetTimestamp();
 
+    /// <summary>Raises the notifications of the properties computed from the state, which the UI binds to.</summary>
+    private void RaiseDerived()
+    {
+        Raise(nameof(IsConnected));
+        Raise(nameof(IsTurningKnob));
+        Raise(nameof(FaderIsSettled));
+        Raise(nameof(LevelText));
+        Raise(nameof(LevelTextWithUnit));
+        Raise(nameof(CurrentInputName));
+        Raise(nameof(CurrentFormat));
+    }
+
     private bool IsConnectedLocked => _processor is not null && _panelRead;
 
     // ---- Sending ------------------------------------------------------------
@@ -654,6 +667,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
             if (_faderInFlight || _pendingFader is not int pending || _processor is not { } link) return;
             _pendingFader = null;
             _faderInFlight = true;
+            RaiseDerived();
             cp = link;
             value = pending;
             param = Model.Panel().Fader;
@@ -666,7 +680,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
                 Note($"{param} not sent: {await cp.LastErrorAsync().ConfigureAwait(false)}");
             }
 
-            lock (_sync) _faderInFlight = false;
+            lock (_sync) { _faderInFlight = false; RaiseDerived(); }
             PumpFader();
         });
     }
@@ -782,6 +796,7 @@ public sealed class RemoteController : ObservableModel, IDisposable
             _pollCancel = null;
             _pendingFader = null;
             _knobValue = null;
+            RaiseDerived();
             cp = _processor;
             if (cp is null) return;
             closedHost = _processorHost;
