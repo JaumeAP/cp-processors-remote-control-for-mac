@@ -1,0 +1,33 @@
+<Window x:Class="CPRemote.Windows.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CP Remote" Width="1100" MinWidth="480"
+        SizeToContent="Height">
+  <DockPanel>
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="_Level">
+        <MenuItem x:Name="LevelUpItem" Header="Level Up" Click="LevelUp_Click" />
+        <MenuItem x:Name="LevelDownItem" Header="Level Down" Click="LevelDown_Click" />
+        <MenuItem x:Name="ReferenceItem" Header="Reference 7.0" Click="Reference_Click" />
+        <Separator />
+        <MenuItem x:Name="DecibelsItem" Header="Show Level in dB" IsCheckable="True" Click="Decibels_Click" />
+      </MenuItem>
+      <MenuItem Header="_Setup">
+        <MenuItem Header="Processor IP..." Click="ProcessorIp_Click" />
+        <MenuItem x:Name="ReconnectItem" Header="Reconnect" Click="Reconnect_Click" />
+        <MenuItem x:Name="DisconnectItem" Header="Disconnect" Click="Disconnect_Click" />
+      </MenuItem>
+    </Menu>
+
+    <StatusBar DockPanel.Dock="Bottom">
+      <StatusBarItem>
+        <TextBlock x:Name="StatusText" Text="Not connected" AutomationProperties.LiveSetting="Polite" />
+      </StatusBarItem>
+    </StatusBar>
+
+    <!-- The front panel of the chosen model; its height follows the panel's aspect. -->
+    <ContentControl x:Name="PanelHost" Background="Black"
+                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                    SizeChanged="PanelHost_SizeChanged" />
+  </DockPanel>
+</Window>

@@ -81,7 +81,7 @@ public sealed class CpSeriesClientTests(ITestOutputHelper output)
     }
 
     /// <summary>A simulator process on a free local port, stopped on dispose.</summary>
-    private sealed class Simulator : IDisposable
+    internal sealed class Simulator : IDisposable
     {
         private readonly Process _process;
 
