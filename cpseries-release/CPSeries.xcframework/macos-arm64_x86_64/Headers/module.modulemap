@@ -1,0 +1,4 @@
+module CPSeriesC {
+    header "cpseries_c.h"
+    export *
+}

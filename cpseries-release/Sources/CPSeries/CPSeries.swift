@@ -1,0 +1,3 @@
+// Re-exports the plain-C API of the released cpseries library (cpseries_c.h),
+// so `import CPSeries` gives Swift code cpseries_new, cpseries_connect, ...
+@_exported import CPSeriesC

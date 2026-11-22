@@ -1,0 +1,23 @@
+Copyright (c) 2026 Jaume Puig. All rights reserved.
+
+This software and its documentation (the "Work") are proprietary. No licence
+or right of any kind is granted to any person: no right to use, copy, modify,
+merge, publish, distribute, sublicense, sell, or make derivative works of the
+Work, in source or binary form, with or without modification, without the
+prior written permission of the copyright holder.
+
+Making the Work visible on a public hosting service does not grant any such
+right beyond what the service's own terms of use give its users to view and
+fork it within that service.
+
+Third-party material. Documents reproduced or quoted from other parties, such
+as Dolby manuals and specifications excerpted under docs/specs/, and
+trademarks (Dolby, CP650, CP750, CP850, CP950, CP950A and others), remain the
+property of their owners and are not licensed by this file.
+
+THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE WORK OR ITS USE.

@@ -1,0 +1,25 @@
+// swift-tools-version:6.0
+// The released cpseries control client (CPSeries v1.1.0), as prebuilt
+// binaries (see RELEASE.md). On macOS, `CPSeries` links the universal static
+// library through CPSeries.xcframework and exposes its plain-C API
+// (cpseries_c.h) to Swift. The Windows x64 build sits in Artifacts/ as
+// released; SwiftPM does not link it.
+import PackageDescription
+
+let package = Package(
+    name: "CPSeriesRelease",
+    platforms: [.macOS(.v14)],
+    products: [
+        .library(name: "CPSeries", targets: ["CPSeries"]),
+    ],
+    targets: [
+        .binaryTarget(name: "CPSeriesC", path: "CPSeries.xcframework"),
+        .target(
+            name: "CPSeries",
+            dependencies: ["CPSeriesC"],
+            // The static library is C++ inside; its C API still needs libc++.
+            linkerSettings: [.linkedLibrary("c++")]
+        ),
+        .testTarget(name: "CPSeriesTests", dependencies: ["CPSeries"]),
+    ]
+)
