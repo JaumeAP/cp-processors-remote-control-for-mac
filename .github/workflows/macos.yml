@@ -33,12 +33,17 @@ jobs:
       - name: Swift version
         run: swift --version
       - name: Build the simulator
-        run: cmake -S simulator -B simulator/build && cmake --build simulator/build
+        run: cmake -S cpseries-simulator -B "$RUNNER_TEMP/sim-build" && cmake --build "$RUNNER_TEMP/sim-build" --target processor_sim
       - name: Test
         working-directory: macos
-        env:
-          CPSIM_BIN: ${{ github.workspace }}/simulator/build/processor_sim
-        run: swift test
+        run: |
+          sim="$RUNNER_TEMP/sim-build/processor_sim"
+          "$sim" --model CP650 --port 61650 & p1=$!
+          "$sim" --model CP750 --port 61750 --seed cp750.sys.fader=55 & p2=$!
+          "$sim" --model CP950 --port 61950 --seed sys.macro_preset=3 --seed sys.macro_name=Feature & p3=$!
+          trap 'kill $p1 $p2 $p3 2>/dev/null || true' EXIT
+          sleep 1
+          CPSIM_PORT_CP650=61650 CPSIM_PORT_CP750=61750 CPSIM_PORT_CP950=61950 swift test
 
   release:
     needs: test
