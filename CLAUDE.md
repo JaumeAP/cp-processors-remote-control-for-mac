@@ -39,14 +39,6 @@ submodule for reference only. It is read-only from this repository:
 CPSeries is private, so only accounts with access to it can initialise the
 submodule; everyone else gets an empty `CPSeries/` folder.
 
-## cpp-client: the vendored C++ control client
-
-`cpp-client/` is a SwiftPM package holding CPSeries' C++ client
-(`cpp/client/`), copied verbatim: the `DolbyCP` C++17 library target and the
-`cp_client` driver. Never edit those sources here; `cpp-client/VENDORED.md`
-lists their origin, hashes and how to refresh them. Build it with
-`swift build --scratch-path <scratchpad>/cpp-client-build` in `cpp-client/`.
-
 ## cpseries-release: the released client binaries
 
 `cpseries-release/` is a SwiftPM package holding CPSeries' release `v1.1.0`
