@@ -49,3 +49,12 @@ here; `cpseries-release/RELEASE.md` lists their origin, hashes and how to
 refresh them. Test it with
 `swift test --scratch-path <scratchpad>/cpseries-release-build` in
 `cpseries-release/`.
+
+## cpseries-simulator: the vendored processor simulator
+
+`cpseries-simulator/` holds CPSeries' `processor_sim.cpp` and `LICENSE` from
+the commit `v1.1.0` was built from, unchanged, plus a `CMakeLists.txt` cut
+from CPSeries' own. Never edit those files here; `cpseries-simulator/VENDORED.md`
+lists their origin, hashes and how to refresh them. The `macOS` workflow builds
+it with `cmake -S cpseries-simulator`, so CI needs no access to the private
+`CPSeries` repository.

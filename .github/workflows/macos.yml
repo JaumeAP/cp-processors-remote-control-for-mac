@@ -30,13 +30,10 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
-          token: ${{ secrets.CPSERIES_TOKEN }}
       - name: Swift version
         run: swift --version
       - name: Build the simulator
-        run: cmake -S CPSeries/cpp -B "$RUNNER_TEMP/sim-build" && cmake --build "$RUNNER_TEMP/sim-build" --target processor_sim
+        run: cmake -S cpseries-simulator -B "$RUNNER_TEMP/sim-build" && cmake --build "$RUNNER_TEMP/sim-build" --target processor_sim
       - name: Test
         working-directory: macos
         run: |
