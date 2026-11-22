@@ -7,8 +7,8 @@ In recording and post-production studios the processor usually sits in the
 machine room, away from the mix room. CP Remote shows the unit's front panel
 on screen: the fader, mute, front-panel buttons and macro selection.
 
-The app is currently interface-only: it has no processor communication, so it
-connects to nothing and its controls stay disabled.
+The app reaches the processor over TCP/IP, through the released cpseries
+control library ([`cpseries-release/`](cpseries-release/RELEASE.md)).
 
 [`macos/`](macos/README.md) holds the app (`CPRemote`). See
 [`macos/ARCHITECTURE.md`](macos/ARCHITECTURE.md) for how the parts fit.

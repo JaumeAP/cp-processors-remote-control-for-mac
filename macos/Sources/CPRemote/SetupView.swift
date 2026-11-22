@@ -1,5 +1,5 @@
 // The Setup sheet: the processor model and IP address, and a Test button
-// (this build has no processor communication, so it only says so).
+// that reports whether the processor chosen here answered at that address.
 
 import SwiftUI
 

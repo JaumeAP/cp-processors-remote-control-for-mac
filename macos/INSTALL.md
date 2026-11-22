@@ -6,5 +6,7 @@ Open the disk image, drag CP Remote to Applications and open it from there. The 
 - macOS 14 Sonoma: Control-click CP Remote, choose Open, then Open again.
 - macOS 15 Sequoia and later (26, 27): Control-click no longer works. Open the app once and close the warning, then go to System Settings, Privacy & Security, scroll to Security, click Open Anyway for CP Remote and confirm. macOS may ask for your password.
 
-**Processor communication**
-This version is interface-only: it shows the processor fronts but does not communicate with any processor, so it needs no network or serial permission.
+**Local network (processors reached by IP address)**
+- macOS 14: no permission is asked.
+- macOS 15 and later: the first connection shows "CP Remote would like to find and connect to devices on your local network". Choose Allow.
+- If you chose Don't Allow, turn CP Remote on in System Settings, Privacy & Security, Local Network. If CP Remote is not in the list, quit it and open it again from Applications.

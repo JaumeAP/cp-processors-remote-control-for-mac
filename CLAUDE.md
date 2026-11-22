@@ -19,8 +19,8 @@ runs:
 On Linux without a system Swift 6, the script downloads Swift 6.3.3 into
 `$SWIFT_SCRATCH_DIR/swift-6.3.3`, never into the home folder, and adds it to
 PATH for the session. The app is SwiftUI and AppKit, so it builds and runs
-only on a Mac, locally or in CI. It is currently interface-only: it has no
-processor communication.
+only on a Mac, locally or in CI. It talks to the processors over TCP/IP
+through the released cpseries library (`cpseries-release/`, below).
 
 ## CPSeries: a read-only submodule
 
