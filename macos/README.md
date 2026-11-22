@@ -8,10 +8,13 @@ CP950's front).
 
 ## Status
 
-1. The app is currently interface-only: it has no processor communication.
-   It connects to nothing, the controls stay disabled, and Setup's Test button
-   only says so.
-2. The CP850 has no front-panel figure in the manuals used here; its front
+1. The app talks to the processor over TCP/IP through the released cpseries
+   library (`../cpseries-release`): it reads the fader, mute, selected
+   button or input, macro and the CP650's programmed formats every two
+   seconds, and sends the controls. Serial lines are not supported.
+2. The CP850 / CP950 macro list is not read: it is a multi-line reply, which
+   the library does not return, so the macro keys step only by number.
+3. The CP850 has no front-panel figure in the manuals used here; its front
    is the CP950's.
 
 ## Requirements
@@ -49,7 +52,11 @@ From `macos/`:
 swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
 ```
 
-The tests need no processor.
+The tests need no processor. `SimulatorLinkTests` also run the model over the
+real library when `CPSIM_PORT_CP650`, `CPSIM_PORT_CP750` and
+`CPSIM_PORT_CP950` name the ports of running CPSeries simulators
+(`processor_sim`, built from `CPSeries/cpp/processor_sim.cpp` outside the
+repository); without them they are skipped.
 
 ## Layout
 
