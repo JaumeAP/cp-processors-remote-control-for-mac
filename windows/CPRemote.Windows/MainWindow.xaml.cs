@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using CPRemote.Core;
 using CPRemote.Core.Model;
 
@@ -16,7 +18,11 @@ namespace CPRemote.Windows;
     Justification = "The controller is disposed when the window closes (see the Closed handler).")]
 public partial class MainWindow : Window
 {
+    /// <summary>The Macro menu lists at most this many macros, as the macOS app does.</summary>
+    private const int MaximumMacroShortcuts = 9;
+
     private readonly RemoteController _controller;
+    private readonly List<MenuItem> _macroItems = [];
     private IFrontPanel? _panel;
     private bool _setupOpen;
 
@@ -36,6 +42,7 @@ public partial class MainWindow : Window
         _controller.PropertyChanged += OnControllerChanged;
 
         ShowPanel();
+        PreviewKeyDown += OnPreviewKeyDown;
         Loaded += OnLoaded;
         Closed += (_, _) => _controller.Dispose();
     }
@@ -124,6 +131,86 @@ public partial class MainWindow : Window
         LevelDownItem.IsEnabled = connected;
         ReferenceItem.IsEnabled = connected;
         DecibelsItem.IsChecked = _controller.LevelInDecibels;
+        RefreshMacroMenu();
+    }
+
+    /// <summary>
+    /// Rebuilds the Macro menu from the processor's list: the first nine macros as
+    /// checkable items, then Next and Previous. Without a list it says so, as the macOS app does.
+    /// </summary>
+    private void RefreshMacroMenu()
+    {
+        foreach (MenuItem item in _macroItems)
+        {
+            MacroMenu.Items.Remove(item);
+        }
+
+        _macroItems.Clear();
+        IReadOnlyList<RemoteController.Macro>? macros = _controller.Macros;
+        bool connected = _controller.IsConnected;
+        NoMacrosItem.Visibility = macros is null ? Visibility.Visible : Visibility.Collapsed;
+        NextMacroItem.Visibility = macros is null ? Visibility.Collapsed : Visibility.Visible;
+        PreviousMacroItem.Visibility = macros is null ? Visibility.Collapsed : Visibility.Visible;
+        NextMacroItem.IsEnabled = connected;
+        PreviousMacroItem.IsEnabled = connected;
+
+        int index = 0;
+        foreach (RemoteController.Macro macro in (macros ?? []).Take(MaximumMacroShortcuts))
+        {
+            int number = macro.Number;
+            var item = new MenuItem
+            {
+                Header = $"{macro.Number}: {macro.Name}",
+                IsCheckable = true,
+                IsChecked = _controller.MacroPreset == number,
+                IsEnabled = connected,
+                InputGestureText = $"Ctrl+Alt+{index + 1}",
+            };
+            item.Click += (_, _) => _controller.SelectMacro(number);
+            _macroItems.Add(item);
+            MacroMenu.Items.Insert(index++, item);
+        }
+    }
+
+    private void NextMacro_Click(object sender, RoutedEventArgs e) => _controller.StepMacro(1);
+
+    private void PreviousMacro_Click(object sender, RoutedEventArgs e) => _controller.StepMacro(-1);
+
+    /// <summary>Ctrl+Alt+1 to 9 select a macro of the list by its place; Ctrl+Alt+Left and Right step through them.</summary>
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != (ModifierKeys.Control | ModifierKeys.Alt))
+        {
+            return;
+        }
+
+        IReadOnlyList<RemoteController.Macro>? macros = _controller.Macros;
+        if (e.Key == Key.Left)
+        {
+            _controller.StepMacro(-1);
+        }
+        else if (e.Key == Key.Right)
+        {
+            _controller.StepMacro(1);
+        }
+        else if (macros is not null && e.Key >= Key.D1 && e.Key <= Key.D9)
+        {
+            int place = (int)e.Key - (int)Key.D1;
+            if (place < macros.Count && place < MaximumMacroShortcuts)
+            {
+                _controller.SelectMacro(macros[place].Number);
+            }
+            else
+            {
+                return;
+            }
+        }
+        else
+        {
+            return;
+        }
+
+        e.Handled = true;
     }
 
     private void LevelUp_Click(object sender, RoutedEventArgs e) => _controller.StepKnob(up: true);
