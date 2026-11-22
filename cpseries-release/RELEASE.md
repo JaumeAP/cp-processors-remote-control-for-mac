@@ -9,8 +9,8 @@ here: refresh them from a newer CPSeries release.
 
 | Archive | SHA-256 (checked against the release notes) |
 | --- | --- |
-| `cpseries-1.1.0-macos-universal.tar.gz` | `fbd26c2c542846ee6b328f2c182a8caac456b1b70e881e5314e62e5b60d7d133` |
-| `cpseries-1.1.0-windows-x64.zip` | `53a828ea0ea211a4341368d3f87676ca0835bbd65327892b1ca7ba4c43fefd68` |
+| `cpseries-1.1.0-macos-universal.tar.gz` | `281f4071336bac9bcc59bd8933fd029ab6cb6479b6487deaffa170b388fd3629` |
+| `cpseries-1.1.0-windows-x64.zip` | `452b6934fe34efece4e6168bf784073b4e0e5b9b4440949786326e912f0d7461` |
 
 ## Layout
 
