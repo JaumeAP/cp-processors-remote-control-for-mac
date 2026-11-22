@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.1.0 (2026-11-22)
+- A test version (pre-release). CP Remote now talks to the processor through the cpseries control library (CPSeries 1.1.0), which replaces its own connection code. The fader, mute, the CP650's format buttons and programmed formats, the CP750's inputs and the CP850 / CP950 macro number and name are read and sent as before. It has been checked against a processor simulator, not yet on a real processor.
+- Not in this version, compared with 1.0.18: serial lines (USB adapters), the CP850 / CP950 macro list with its names, the window that helps allow CP Remote on the local network, and the lines exchanged with the processor in the connection log. Keep 1.0.18 for any of these.
+
 ## 1.0.18 (2026-11-19)
 - The window that helps allow CP Remote on the local network now says what applies to the macOS version: from macOS 27.2 it points to the + button of the Local Network list; before that it says to quit and reopen CP Remote from Applications so macOS lists it.
 - The "Move to Applications" message no longer says that macOS ties the permission to where the app is; it says a copy run from the disk image disappears when the image is ejected, and macOS may ask again for permissions.
