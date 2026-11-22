@@ -12,6 +12,11 @@
         <Separator />
         <MenuItem x:Name="DecibelsItem" Header="Show Level in dB" IsCheckable="True" Click="Decibels_Click" />
       </MenuItem>
+      <MenuItem x:Name="MacroMenu" Header="_Macro">
+        <MenuItem x:Name="NoMacrosItem" Header="No macros on this processor" IsEnabled="False" />
+        <MenuItem x:Name="NextMacroItem" Header="Next Macro" Click="NextMacro_Click" InputGestureText="Ctrl+Alt+Right" />
+        <MenuItem x:Name="PreviousMacroItem" Header="Previous Macro" Click="PreviousMacro_Click" InputGestureText="Ctrl+Alt+Left" />
+      </MenuItem>
       <MenuItem Header="_Setup">
         <MenuItem Header="Processor IP..." Click="ProcessorIp_Click" />
         <MenuItem x:Name="ReconnectItem" Header="Reconnect" Click="Reconnect_Click" />
