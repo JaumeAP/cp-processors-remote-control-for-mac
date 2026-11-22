@@ -1,0 +1,37 @@
+name: Windows
+
+# Builds and tests the Windows packages on every push to main and every pull
+# request: the common core library with its tests (the test host loads the
+# release libcpseries.dll and drives the vendored processor_sim.exe), and the
+# WPF application. The macOS app is tested by macos.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build the simulator
+        shell: pwsh
+        run: |
+          cmake -S cpseries-simulator -B "$env:RUNNER_TEMP\sim-build"
+          cmake --build "$env:RUNNER_TEMP\sim-build" --config Release --target processor_sim
+          "CPSERIES_SIMULATOR=$env:RUNNER_TEMP\sim-build\Release\processor_sim.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test the core library
+        run: dotnet test common/CPRemote.Core.Tests/CPRemote.Core.Tests.csproj --configuration Release
+
+      - name: Build the WPF application
+        run: dotnet build windows/CPRemote.Windows/CPRemote.Windows.csproj --configuration Release --no-incremental
