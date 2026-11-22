@@ -88,6 +88,22 @@ public sealed class RemoteControllerTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void Derived_properties_notify_when_their_inputs_change()
+    {
+        using var controller = new RemoteController(new Dictionary<string, string>());
+        var changed = new List<string>();
+        controller.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
+
+        controller.ToggleLevelUnit();
+        controller.BeginKnobTurn();
+        controller.EndKnobTurn();
+
+        Assert.Contains(nameof(RemoteController.LevelText), changed);
+        Assert.Contains(nameof(RemoteController.LevelTextWithUnit), changed);
+        Assert.Contains(nameof(RemoteController.IsTurningKnob), changed);
+    }
+
+    [Fact]
     public void Controls_stay_off_without_a_link()
     {
         using var controller = new RemoteController(new Dictionary<string, string>());
