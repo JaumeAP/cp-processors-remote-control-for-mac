@@ -16,6 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +29,10 @@ jobs:
         run: |
           cmake -S cpseries-simulator -B "$env:RUNNER_TEMP\sim-build"
           cmake --build "$env:RUNNER_TEMP\sim-build" --config Release --target processor_sim
-          "CPSERIES_SIMULATOR=$env:RUNNER_TEMP\sim-build\Release\processor_sim.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $sim = "$env:RUNNER_TEMP\sim-build\Release\processor_sim.exe"
+          # The simulator test skips itself when the variable names no file, so fail here instead of letting it pass unrun.
+          if (-not (Test-Path $sim)) { throw "processor_sim.exe was not built: $sim" }
+          "CPSERIES_SIMULATOR=$sim" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Test the core library
         run: dotnet test common/CPRemote.Core.Tests/CPRemote.Core.Tests.csproj --configuration Release
