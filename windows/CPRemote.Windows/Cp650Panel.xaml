@@ -1,9 +1,0 @@
-<UserControl x:Class="CPRemote.Windows.Cp650Panel"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             AutomationProperties.Name="CP650 front panel">
-  <Viewbox Stretch="Uniform">
-    <!-- The canvas is figure 2-1 of the CP650 manual, in its own units. -->
-    <Canvas x:Name="Stage" Width="956" Height="280" />
-  </Viewbox>
-</UserControl>

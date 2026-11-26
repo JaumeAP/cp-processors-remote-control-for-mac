@@ -1,9 +1,0 @@
-<UserControl x:Class="CPRemote.Windows.Cp750Panel"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             AutomationProperties.Name="CP750 front panel">
-  <Viewbox Stretch="Uniform">
-    <!-- Drawn in units of the panel's height; the code sizes the canvas to the panel's aspect. -->
-    <Canvas x:Name="Stage" />
-  </Viewbox>
-</UserControl>
