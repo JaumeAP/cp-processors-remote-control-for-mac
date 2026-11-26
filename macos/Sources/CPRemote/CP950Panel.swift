@@ -36,28 +36,8 @@ struct CP950Panel: View {
                 .accessibilityLabel("Fader \(model.levelTextWithUnit)")
                 .accessibilityHint("Switches between the fader number and decibels")
                 .accessibilityAddTraits(.isButton)
-                if let macros = model.macros {
-                    // The macros the unit offers; the selected one is white.
-                    ForEach(Array(macros.prefix(8).enumerated()), id: \.element.number) { index, macro in
-                        let selected = macro.number == model.macroPreset
-                        grid.put(
-                            0.52, 0.45 + 0.042 * CGFloat(index),
-                            Button {
-                                model.selectMacro(macro.number)
-                            } label: {
-                                Text("\(selected ? "\u{25B8} " : "")\(macro.name)")
-                                    .font(.system(size: grid.panelHeight * 0.036, weight: selected ? .bold : .regular))
-                                    .foregroundStyle(selected ? Color.white : Color(white: 0.6))
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.5)
-                                    .frame(width: grid.panelWidth * 0.19, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(!model.isConnected)
-                            .accessibilityLabel("Macro \(macro.number): \(macro.name)")
-                            .accessibilityAddTraits(selected ? .isSelected : []))
-                    }
-                } else if let macro = model.macroName {
+                // The selected macro's name, as the unit shows it.
+                if let macro = model.macroName {
                     grid.label(macro, 0.52, 0.5, size: 0.06, width: 0.19, weight: .regular, color: Color(white: 0.7))
                 }
                 grid.put(

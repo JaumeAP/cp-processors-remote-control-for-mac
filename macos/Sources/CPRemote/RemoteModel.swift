@@ -109,19 +109,13 @@ final class RemoteModel: ObservableObject {
     /// The selected macro's name, read from the processor (CP850 / CP950 / CP950A).
     @Published var macroName: String?
     @Published var macroPreset: Int?
-    /// The macros the processor offers, in its order (CP850 / CP950 / CP950A).
-    /// Not read in this build: the list is a multi-line reply, which the
-    /// cpseries library does not return.
-    @Published var macros: [Macro]?
+    // The processor's macro list is not read: it is a multi-line reply, which
+    // the cpx50comms library does not return. Only the selected macro's number
+    // and name are shown.
     var macroMisses = 0
     var macroPollsToSkip = 0
     /// The macro number `macroName` belongs to; nil when no name is known.
     var macroNameNumber: Int?
-
-    struct Macro: Equatable, Sendable {
-        let number: Int
-        let name: String
-    }
 
     /// Show the level in decibels (7.0 is 0 dB) instead of the fader number.
     @Published var levelInDecibels = false
@@ -178,9 +172,12 @@ final class RemoteModel: ObservableObject {
         self.reopenPause = reopenPause
         host = defaults.string(forKey: Self.hostKey) ?? ""
         levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
+        // A saved CP950A is the CP950 choice (one front, one protocol), so
+        // Setup's picker finds it among `choices`.
         processorModel =
             defaults.string(forKey: Self.modelKey)
-            .flatMap { ProcessorModel(rawValue: $0) } ?? .cp650
+            .flatMap { ProcessorModel(rawValue: $0) }
+            .map { $0 == .cp950a ? .cp950 : $0 } ?? .cp650
     }
 
     /// Choose the processor model and remember it. Takes effect at connect.
@@ -273,20 +270,12 @@ final class RemoteModel: ObservableObject {
     func selectMacro(_ number: Int) {
         guard let link = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
         macroPreset = number
-        // The new macro's name from the list; unknown, it is blank until the
-        // poll reads it (the poll asks whenever the name shown is not the
-        // selected macro's: `macroNameNumber`).
-        macroName = macros?.first(where: { $0.number == number })?.name
-        macroNameNumber = macroName == nil ? nil : number
+        // The new macro's name is blank until the poll reads it (the poll asks
+        // whenever the name shown is not the selected macro's: `macroNameNumber`).
+        macroName = nil
+        macroNameNumber = nil
         localChange[nameParam] = .now
         send(Self.macroPresetParam, on: link) { await link.set(Self.macroPresetParam, number) }
-    }
-
-    /// The next (or previous) macro in the processor's list, wrapping round.
-    func stepMacro(by delta: Int) {
-        guard let macros, !macros.isEmpty else { return }
-        let index = macros.firstIndex { $0.number == macroPreset } ?? (delta > 0 ? -1 : 0)
-        selectMacro(macros[(index + delta + macros.count) % macros.count].number)
     }
 
     /// The CP750's selected input, by its name on the front.

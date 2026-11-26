@@ -116,7 +116,7 @@ struct CP850Panel: View {
                             diameter: grid.panelHeight * 0.12, label: "\(key)", lit: selected ? Self.blue : nil,
                             enabled: model.isConnected
                         ) { model.selectMacro(key) }
-                        .accessibilityLabel(macroLabel(key: key))
+                        .accessibilityLabel("Macro key \(key)")
                         .accessibilityAddTraits(selected ? .isSelected : []))
                 }
                 // The power key, at the right end (no wire command here).
@@ -139,10 +139,5 @@ struct CP850Panel: View {
             .minimumScaleFactor(0.5)
             .frame(width: grid.panelWidth * 0.165, alignment: .leading)
             .position(x: grid.panelWidth * 0.435, y: grid.panelHeight * (0.375 + 0.077 * CGFloat(row)))
-    }
-
-    private func macroLabel(key: Int) -> String {
-        let name = model.macros?.first { $0.number == key }?.name
-        return "Macro key \(key)" + (name.map { ": \($0)" } ?? "")
     }
 }

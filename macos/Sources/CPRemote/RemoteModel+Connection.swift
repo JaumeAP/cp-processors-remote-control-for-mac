@@ -18,8 +18,19 @@ extension RemoteModel {
     /// Check the processor at `address`, as `chosen` (the model picked in
     /// Setup, not yet saved; the saved one when nil). When the main link is
     /// to that address and model, ask over it (the CP650 serves one control
-    /// client); otherwise open a short-lived second link.
+    /// client); otherwise open a short-lived second link. It runs in the same
+    /// chain as connect and disconnect, so it never asks a link being closed.
     func test(address raw: String, model chosen: ProcessorModel? = nil) async -> String {
+        let previous = lifecycle
+        let task = Task { @MainActor in
+            await previous?.value
+            return await self.testNow(address: raw, model: chosen)
+        }
+        lifecycle = Task { @MainActor in _ = await task.value }
+        return await task.value
+    }
+
+    func testNow(address raw: String, model chosen: ProcessorModel?) async -> String {
         let address = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !address.isEmpty else { return "Type an IP address first." }
         let model = chosen ?? processorModel
@@ -89,7 +100,6 @@ extension RemoteModel {
         macroName = nil
         macroNameNumber = nil
         macroPreset = nil
-        macros = nil
         muted = false
         formatButton = nil
         programmedFormats = nil
@@ -150,7 +160,6 @@ extension RemoteModel {
         macroName = nil
         macroNameNumber = nil
         macroPreset = nil
-        macros = nil
         panelRead = false
         announceConnectionChange()
         await link.disconnect()

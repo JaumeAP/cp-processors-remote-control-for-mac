@@ -82,6 +82,18 @@ install_in_scratch() {
         trap "rm -rf '$tmp'" EXIT
         log "downloading Swift $version (about 1 GB) into $scratch"
         curl -fL --retry 3 --retry-delay 5 -sS -o "$tmp/swift.tar.gz" "$url"
+        # Check the download against swift.org's signature before running it:
+        # the method swift.org documents (its signing keys, then gpg --verify),
+        # with a keyring of its own in the scratchpad, never in the home folder.
+        command -v gpg >/dev/null || { log "gpg is needed to verify the Swift download"; exit 1; }
+        curl -fL --retry 3 --retry-delay 5 -sS -o "$tmp/swift.tar.gz.sig" "$url.sig"
+        curl -fL --retry 3 --retry-delay 5 -sS -o "$tmp/swift-keys.asc" "https://swift.org/keys/all-keys.asc"
+        mkdir -m 700 "$tmp/gnupg"
+        GNUPGHOME="$tmp/gnupg" gpg --batch --quiet --import "$tmp/swift-keys.asc"
+        if ! GNUPGHOME="$tmp/gnupg" gpg --batch --verify "$tmp/swift.tar.gz.sig" "$tmp/swift.tar.gz" 2>/dev/null; then
+            log "the Swift $version download does not match swift.org's signature: not installed"
+            exit 1
+        fi
         mkdir -p "$tmp/unpacked"
         tar -xzf "$tmp/swift.tar.gz" --strip-components=1 -C "$tmp/unpacked"
         rm -rf "$target"
@@ -92,7 +104,8 @@ install_in_scratch() {
         fi
     fi
     if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-        local line="export PATH=\"$target/usr/bin:\$PATH\""
+        local line
+        line="export PATH=$(printf '%q' "$target/usr/bin"):\$PATH"
         grep -qxF "$line" "$CLAUDE_ENV_FILE" 2>/dev/null || echo "$line" >> "$CLAUDE_ENV_FILE"
     fi
     log "local: Swift $version from $target (add $target/usr/bin to PATH)"
