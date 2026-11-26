@@ -1,6 +1,6 @@
 // swift-tools-version:6.0
 // The released cpx50comms control client (CPSeries v2.1.0), as prebuilt
-// binaries (see RELEASE.md). On macOS, `CPSeries` links the arm64 dynamic
+// binaries (see RELEASE.md). On macOS, `CPSeries` links the universal dynamic
 // library through CPSeries.xcframework and exposes its plain-C API
 // (cpx50comms_c.h) to Swift.
 import PackageDescription
