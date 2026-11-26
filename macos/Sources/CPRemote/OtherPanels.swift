@@ -25,8 +25,10 @@ private struct Grid {
     }
 
     /// A rectangle `dw` by `dh` (fractions of width and height) centred at `x`, `y`.
-    func rect<Fill: ShapeStyle>(_ x: CGFloat, _ y: CGFloat, _ dw: CGFloat, _ dh: CGFloat,
-                                fill: Fill, radius: CGFloat = 0) -> some View {
+    func rect<Fill: ShapeStyle>(
+        _ x: CGFloat, _ y: CGFloat, _ dw: CGFloat, _ dh: CGFloat,
+        fill: Fill, radius: CGFloat = 0
+    ) -> some View {
         RoundedRectangle(cornerRadius: radius)
             .fill(fill)
             .frame(width: w * dw, height: h * dh)
@@ -39,11 +41,16 @@ private struct Grid {
     }
 
     /// Text centred at `x`, `y`, sized as a fraction of the height.
-    func label(_ text: String, _ x: CGFloat, _ y: CGFloat, size: CGFloat, width: CGFloat = 0.2,
-               weight: Font.Weight = .semibold, italic: Bool = false, color: Color) -> some View {
+    func label(
+        _ text: String, _ x: CGFloat, _ y: CGFloat, size: CGFloat, width: CGFloat = 0.2,
+        weight: Font.Weight = .semibold, italic: Bool = false, color: Color
+    ) -> some View {
         Text(text)
-            .font(italic ? Font.system(size: h * size, weight: weight).italic()
-                         : Font.system(size: h * size, weight: weight))
+            .font(
+                italic
+                    ? Font.system(size: h * size, weight: weight).italic()
+                    : Font.system(size: h * size, weight: weight)
+            )
             .foregroundStyle(color)
             .multilineTextAlignment(.center)
             .lineLimit(text.contains("\n") ? 2 : 1)
@@ -55,17 +62,19 @@ private struct Grid {
 
 private let frontGrey = Color(white: 0.74)
 private let frontDark = Color(white: 0.09)
-private let keyCap = RadialGradient(colors: [Color(white: 0.9), Color(white: 0.55)],
-                                    center: .init(x: 0.35, y: 0.3), startRadius: 0, endRadius: 40)
-private let knobBody = RadialGradient(colors: [Color(white: 0.3), Color(white: 0.08)],
-                                      center: .init(x: 0.38, y: 0.3), startRadius: 0, endRadius: 120)
+private let keyCap = RadialGradient(
+    colors: [Color(white: 0.9), Color(white: 0.55)],
+    center: .init(x: 0.35, y: 0.3), startRadius: 0, endRadius: 40)
+private let knobBody = RadialGradient(
+    colors: [Color(white: 0.3), Color(white: 0.08)],
+    center: .init(x: 0.38, y: 0.3), startRadius: 0, endRadius: 120)
 
 // MARK: - Live keys
 
 /// A round key drawn after the panel's keycaps. A press calls `action`.
 private struct Key: View {
     let diameter: CGFloat
-    var lit: Color? = nil
+    var lit: Color?
     var enabled: Bool = true
     let action: () -> Void
 
@@ -99,9 +108,12 @@ struct CP750Panel: View {
             ZStack {
                 // Rack ears and the grey front.
                 Rectangle().fill(Color(white: 0.1))
-                g.rect(0.5, 0.5, 0.86, 0.9, fill: LinearGradient(colors: [Color(white: 0.86), Color(white: 0.6)],
-                                                                  startPoint: .top, endPoint: .bottom),
-                       radius: g.h * 0.04)
+                g.rect(
+                    0.5, 0.5, 0.86, 0.9,
+                    fill: LinearGradient(
+                        colors: [Color(white: 0.86), Color(white: 0.6)],
+                        startPoint: .top, endPoint: .bottom),
+                    radius: g.h * 0.04)
                 // The red Dolby badge, top right.
                 g.rect(0.8, 0.09, 0.27, 0.2, fill: Color(red: 0.8, green: 0.08, blue: 0.1), radius: g.h * 0.03)
                 g.label("DOLBY", 0.76, 0.09, size: 0.11, width: 0.12, weight: .heavy, color: .white)
@@ -109,19 +121,29 @@ struct CP750Panel: View {
                 // The seven input-select keys, with their names above; the
                 // selected one lights.
                 g.label("Input Select", 0.763, 0.86, size: 0.06, width: 0.2, color: Color(white: 0.3))
-                let inputs = ["Digital\n1", "Digital\n2", "Digital\n3", "Digital\n4", "Multi-Ch\nAnalog", "\nNonSync", "\nMic"]
+                let inputs = [
+                    "Digital\n1", "Digital\n2", "Digital\n3", "Digital\n4", "Multi-Ch\nAnalog", "\nNonSync", "\nMic",
+                ]
                 let inputX: [CGFloat] = [0.643, 0.685, 0.722, 0.763, 0.802, 0.843, 0.883]
-                let inputNames = ["Digital 1", "Digital 2", "Digital 3", "Digital 4", "Multi-Ch Analog",
-                                  "NonSync", "Mic"]
+                let inputNames = [
+                    "Digital 1", "Digital 2", "Digital 3", "Digital 4", "Multi-Ch Analog",
+                    "NonSync", "Mic",
+                ]
                 ForEach(0..<7, id: \.self) { index in
                     let selected = model.formatButton == index + 1
-                    g.put(inputX[index], 0.5, Key(diameter: g.h * 0.133, lit: selected ? .white : nil,
-                                                 enabled: model.isConnected) { model.pressButton(index + 1) }
+                    g.put(
+                        inputX[index], 0.5,
+                        Key(
+                            diameter: g.h * 0.133, lit: selected ? .white : nil,
+                            enabled: model.isConnected
+                        ) { model.pressButton(index + 1) }
                         .accessibilityLabel("Input \(inputNames[index])")
                         .accessibilityAddTraits(selected ? .isSelected : []))
-                    g.label(inputs[index], inputX[index], 0.31, size: 0.05, width: 0.038,
-                            weight: .bold, color: Color(white: 0.2))
-                        .accessibilityHidden(true)
+                    g.label(
+                        inputs[index], inputX[index], 0.31, size: 0.05, width: 0.038,
+                        weight: .bold, color: Color(white: 0.2)
+                    )
+                    .accessibilityHidden(true)
                 }
                 // The four Valid lamps under the inputs (no wire command here).
                 ForEach(0..<4, id: \.self) { index in
@@ -130,21 +152,28 @@ struct CP750Panel: View {
                 // Menu keys and check mark (no wire command here), mute (live), USB.
                 g.disc(0.19, 0.2, 0.122, fill: keyCap)
                 g.disc(0.19, 0.68, 0.122, fill: keyCap)
-                g.put(0.39, 0.68, Key(diameter: g.h * 0.122,
-                                      lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
-                                      enabled: model.isConnected) { model.toggleMute() }
+                g.put(
+                    0.39, 0.68,
+                    Key(
+                        diameter: g.h * 0.122,
+                        lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
+                        enabled: model.isConnected
+                    ) { model.toggleMute() }
                     .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
                 g.rect(0.55, 0.69, 0.025, 0.12, fill: Color(white: 0.25), radius: 2)
                 // The display: the fader level, as the unit shows it.
                 g.disc(0.28, 0.53, 0.72, fill: frontDark)
-                g.label("Volume \(model.levelTextWithUnit)", 0.28, 0.5, size: 0.1, width: 0.15,
-                        weight: .regular, color: Color(white: 0.7))
-                    .onTapGesture { model.toggleLevelUnit() }
-                    .accessibilityLabel("Volume \(model.levelTextWithUnit)")
-                    .accessibilityHint("Switches between the fader number and decibels")
-                    .accessibilityAddTraits(.isButton)
-                g.label(model.currentInputName, 0.28, 0.6, size: 0.07, width: 0.12, weight: .regular,
-                        color: Color(white: 0.5))
+                g.label(
+                    "Volume \(model.levelTextWithUnit)", 0.28, 0.5, size: 0.1, width: 0.15,
+                    weight: .regular, color: Color(white: 0.7)
+                )
+                .onTapGesture { model.toggleLevelUnit() }
+                .accessibilityLabel("Volume \(model.levelTextWithUnit)")
+                .accessibilityHint("Switches between the fader number and decibels")
+                .accessibilityAddTraits(.isButton)
+                g.label(
+                    model.currentInputName, 0.28, 0.6, size: 0.07, width: 0.12, weight: .regular,
+                    color: Color(white: 0.5))
                 // The main fader knob, to the right of the display: live.
                 g.put(0.46, 0.44, FaderKnob(model: model, diameter: g.h * 0.53))
             }
@@ -161,15 +190,17 @@ struct CP750Panel: View {
 private struct DarkKey: View {
     let diameter: CGFloat
     var label: String = ""
-    var symbol: String? = nil
-    var lit: Color? = nil
+    var symbol: String?
+    var lit: Color?
     var enabled: Bool = true
-    var action: (() -> Void)? = nil
+    var action: (() -> Void)?
 
     var body: some View {
         let face = ZStack {
-            Circle().fill(RadialGradient(colors: [Color(white: 0.25), Color(white: 0.03)],
-                                         center: .init(x: 0.4, y: 0.3), startRadius: 0, endRadius: diameter))
+            Circle().fill(
+                RadialGradient(
+                    colors: [Color(white: 0.25), Color(white: 0.03)],
+                    center: .init(x: 0.4, y: 0.3), startRadius: 0, endRadius: diameter))
             Circle().stroke(Color(white: 0.55), lineWidth: diameter * 0.05)
             if let symbol {
                 Image(systemName: symbol)
@@ -208,22 +239,32 @@ struct CP850Panel: View {
             ZStack {
                 // Rack ears and the black front.
                 Rectangle().fill(Color(white: 0.06))
-                g.rect(0.5, 0.5, 0.9, 0.98, fill: LinearGradient(colors: [Color(white: 0.13), Color(white: 0.05)],
-                                                                 startPoint: .top, endPoint: .bottom),
-                       radius: g.h * 0.03)
+                g.rect(
+                    0.5, 0.5, 0.9, 0.98,
+                    fill: LinearGradient(
+                        colors: [Color(white: 0.13), Color(white: 0.05)],
+                        startPoint: .top, endPoint: .bottom),
+                    radius: g.h * 0.03)
                 // The left block: Dolby mark, the fader knob (live), mute (live).
                 g.label("DOLBY", 0.17, 0.17, size: 0.12, width: 0.12, weight: .heavy, color: Color(white: 0.9))
                 g.put(0.165, 0.52, FaderKnob(model: model, diameter: g.h * 0.5))
-                g.put(0.262, 0.52, DarkKey(diameter: g.h * 0.13, symbol: "speaker.slash.fill",
-                                           lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
-                                           enabled: model.isConnected) { model.toggleMute() }
+                g.put(
+                    0.262, 0.52,
+                    DarkKey(
+                        diameter: g.h * 0.13, symbol: "speaker.slash.fill",
+                        lit: model.muted ? Color(red: 1, green: 0.15, blue: 0.1) : nil,
+                        enabled: model.isConnected
+                    ) { model.toggleMute() }
                     .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
                 // The blue light strip between the blocks.
                 g.rect(0.312, 0.5, 0.004, 0.94, fill: Self.blue, radius: 1)
                 // The brushed aluminium inlay, a long capsule.
-                g.rect(0.655, 0.49, 0.62, 0.44, fill: LinearGradient(colors: [Color(white: 0.88), Color(white: 0.66)],
-                                                                     startPoint: .top, endPoint: .bottom),
-                       radius: g.h * 0.22)
+                g.rect(
+                    0.655, 0.49, 0.62, 0.44,
+                    fill: LinearGradient(
+                        colors: [Color(white: 0.88), Color(white: 0.66)],
+                        startPoint: .top, endPoint: .bottom),
+                    radius: g.h * 0.22)
                 // The four-line LCD: the fader and the macro, then the menu.
                 g.rect(0.435, 0.49, 0.175, 0.33, fill: Color(red: 0.62, green: 0.74, blue: 0.78), radius: g.h * 0.02)
                 lcdLine("Fader: \(model.levelTextWithUnit)", g, row: 0)
@@ -248,16 +289,20 @@ struct CP850Panel: View {
                 // CP850 uses the same command). The selected key's number is blue.
                 ForEach(1...8, id: \.self) { key in
                     let selected = model.macroPreset == key
-                    g.put(Self.macroX[key - 1], 0.49,
-                          DarkKey(diameter: g.h * 0.12, label: "\(key)", lit: selected ? Self.blue : nil,
-                                  enabled: model.isConnected) { model.selectMacro(key) }
-                            .accessibilityLabel(macroLabel(key: key))
-                            .accessibilityAddTraits(selected ? .isSelected : []))
+                    g.put(
+                        Self.macroX[key - 1], 0.49,
+                        DarkKey(
+                            diameter: g.h * 0.12, label: "\(key)", lit: selected ? Self.blue : nil,
+                            enabled: model.isConnected
+                        ) { model.selectMacro(key) }
+                        .accessibilityLabel(macroLabel(key: key))
+                        .accessibilityAddTraits(selected ? .isSelected : []))
                 }
                 // The power key, at the right end (no wire command here).
                 g.put(0.93, 0.49, DarkKey(diameter: g.h * 0.12, symbol: "power"))
-                g.label("Dolby Atmos Cinema Processor CP850", 0.82, 0.86, size: 0.075, width: 0.3,
-                        weight: .medium, italic: true, color: Color(white: 0.85))
+                g.label(
+                    "Dolby Atmos Cinema Processor CP850", 0.82, 0.86, size: 0.075, width: 0.3,
+                    weight: .medium, italic: true, color: Color(white: 0.85))
             }
         }
         .aspectRatio(ProcessorModel.cp850.aspect, contentMode: .fit)
@@ -293,48 +338,62 @@ struct CP950Panel: View {
             ZStack {
                 // The dark front, its left rack ear included.
                 Rectangle().fill(Color(white: 0.16))
-                g.rect(0.565, 0.5, 0.87, 0.96, fill: LinearGradient(colors: [Color(white: 0.22), Color(white: 0.12)],
-                                                                    startPoint: .top, endPoint: .bottom),
-                       radius: g.h * 0.03)
+                g.rect(
+                    0.565, 0.5, 0.87, 0.96,
+                    fill: LinearGradient(
+                        colors: [Color(white: 0.22), Color(white: 0.12)],
+                        startPoint: .top, endPoint: .bottom),
+                    radius: g.h * 0.03)
                 // The main fader knob, large, at the left: live.
                 g.put(0.322, 0.483, FaderKnob(model: model, diameter: g.h * 0.413))
                 // The touch screen: the fader level, and the speaker icon that
                 // mutes (the manual's soft button for it).
                 g.rect(0.52, 0.48, 0.209, 0.558, fill: Color(red: 0.05, green: 0.07, blue: 0.1), radius: g.h * 0.03)
-                g.label("FADER \(model.levelTextWithUnit)", 0.535, 0.36, size: model.levelInDecibels ? 0.06 : 0.075, width: 0.15,
-                        weight: .bold, color: Color(white: 0.85))
-                    .onTapGesture { model.toggleLevelUnit() }
-                    .accessibilityLabel("Fader \(model.levelTextWithUnit)")
-                    .accessibilityHint("Switches between the fader number and decibels")
-                    .accessibilityAddTraits(.isButton)
+                g.label(
+                    "FADER \(model.levelTextWithUnit)", 0.535, 0.36, size: model.levelInDecibels ? 0.06 : 0.075,
+                    width: 0.15,
+                    weight: .bold, color: Color(white: 0.85)
+                )
+                .onTapGesture { model.toggleLevelUnit() }
+                .accessibilityLabel("Fader \(model.levelTextWithUnit)")
+                .accessibilityHint("Switches between the fader number and decibels")
+                .accessibilityAddTraits(.isButton)
                 if let macros = model.macros {
                     // The macros the unit offers; the selected one is white.
                     ForEach(Array(macros.prefix(8).enumerated()), id: \.element.number) { index, macro in
                         let selected = macro.number == model.macroPreset
-                        g.put(0.52, 0.45 + 0.042 * CGFloat(index), Button { model.selectMacro(macro.number) } label: {
-                            Text("\(selected ? "\u{25B8} " : "")\(macro.name)")
-                                .font(.system(size: g.h * 0.036, weight: selected ? .bold : .regular))
-                                .foregroundStyle(selected ? Color.white : Color(white: 0.6))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
-                                .frame(width: g.w * 0.19, alignment: .leading)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!model.isConnected)
-                        .accessibilityLabel("Macro \(macro.number): \(macro.name)")
-                        .accessibilityAddTraits(selected ? .isSelected : []))
+                        g.put(
+                            0.52, 0.45 + 0.042 * CGFloat(index),
+                            Button {
+                                model.selectMacro(macro.number)
+                            } label: {
+                                Text("\(selected ? "\u{25B8} " : "")\(macro.name)")
+                                    .font(.system(size: g.h * 0.036, weight: selected ? .bold : .regular))
+                                    .foregroundStyle(selected ? Color.white : Color(white: 0.6))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.5)
+                                    .frame(width: g.w * 0.19, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!model.isConnected)
+                            .accessibilityLabel("Macro \(macro.number): \(macro.name)")
+                            .accessibilityAddTraits(selected ? .isSelected : []))
                     }
                 } else if let macro = model.macroName {
                     g.label(macro, 0.52, 0.5, size: 0.06, width: 0.19, weight: .regular, color: Color(white: 0.7))
                 }
-                g.put(0.44, 0.36, Button { model.toggleMute() } label: {
-                    Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: g.h * 0.07))
-                        .foregroundStyle(model.muted ? Color.red : Color(white: 0.85))
-                }
-                .buttonStyle(.plain)
-                .disabled(!model.isConnected)
-                .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
+                g.put(
+                    0.44, 0.36,
+                    Button {
+                        model.toggleMute()
+                    } label: {
+                        Image(systemName: model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: g.h * 0.07))
+                            .foregroundStyle(model.muted ? Color.red : Color(white: 0.85))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!model.isConnected)
+                    .accessibilityLabel(model.muted ? "Unmute" : "Mute"))
                 // The vertical status LEDs (no wire command here): green, as in the photo.
                 g.rect(0.66, 0.5, 0.005, 0.72, fill: Color(red: 0.2, green: 0.8, blue: 0.3), radius: 1)
                 // The booth monitor volume knob and its speaker grille (no wire command here).
@@ -354,8 +413,9 @@ struct CP950Panel: View {
             let step = size.height / 14
             for row in 0..<14 {
                 for column in 0..<Int(size.width / step) {
-                    let point = CGRect(x: CGFloat(column) * step + step / 2 - 1,
-                                       y: CGFloat(row) * step + step / 2 - 1, width: 2, height: 2)
+                    let point = CGRect(
+                        x: CGFloat(column) * step + step / 2 - 1,
+                        y: CGFloat(row) * step + step / 2 - 1, width: 2, height: 2)
                     context.fill(Path(ellipseIn: point), with: .color(Color(white: 0.4)))
                 }
             }

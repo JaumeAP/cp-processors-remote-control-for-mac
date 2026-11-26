@@ -4,6 +4,7 @@
 
 import Foundation
 import Testing
+
 @testable import CPRemote
 
 private func simulatorPort(_ model: ProcessorModel) -> UInt16? {
@@ -86,8 +87,9 @@ struct SimulatorLinkTests {
     }
 
     @Test func testButtonReportsAMissingProcessor() async throws {
-        let model = RemoteModel(defaults: try #require(UserDefaults(suiteName: "CPRemoteTests.sim.none")),
-                                port: 9, log: nil)
+        let model = RemoteModel(
+            defaults: try #require(UserDefaults(suiteName: "CPRemoteTests.sim.none")),
+            port: 9, log: nil)
         #expect(await model.test(address: "127.0.0.1", model: .cp750).hasPrefix("No connection"))
     }
 }

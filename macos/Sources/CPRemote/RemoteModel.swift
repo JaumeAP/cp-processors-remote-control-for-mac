@@ -20,7 +20,7 @@ struct PanelProfile {
     let faderMinimum: Int
     /// The parameter that names the selected macro, shown on the screen
     /// (CP850 / CP950 / CP950A).
-    var macroName: String? = nil
+    var macroName: String?
 }
 
 extension ProcessorModel {
@@ -29,12 +29,14 @@ extension ProcessorModel {
         case .cp650:
             PanelProfile(fader: "fader_level", mute: "mute", inputs: nil, faderMinimum: 0)
         case .cp750:
-            PanelProfile(fader: "cp750.sys.fader", mute: "cp750.sys.mute",
-                         inputs: ["dig_1", "dig_2", "dig_3", "dig_4", "analog", "non_sync", "mic"],
-                         faderMinimum: 0)
+            PanelProfile(
+                fader: "cp750.sys.fader", mute: "cp750.sys.mute",
+                inputs: ["dig_1", "dig_2", "dig_3", "dig_4", "analog", "non_sync", "mic"],
+                faderMinimum: 0)
         case .cp850, .cp950, .cp950a:
-            PanelProfile(fader: "sys.fader", mute: "sys.mute", inputs: nil, faderMinimum: 1,
-                         macroName: "sys.macro_name")
+            PanelProfile(
+                fader: "sys.fader", mute: "sys.mute", inputs: nil, faderMinimum: 1,
+                macroName: "sys.macro_name")
         }
     }
 }
@@ -159,15 +161,18 @@ final class RemoteModel: ObservableObject {
     /// The CP650's reopen pause, `cp650ReopenPause` unless a test sets it.
     let reopenPause: Double
 
-    init(defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared,
-         reopenPause: Double = RemoteModel.cp650ReopenPause) {
+    init(
+        defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared,
+        reopenPause: Double = RemoteModel.cp650ReopenPause
+    ) {
         self.defaults = defaults
         self.port = port
         self.log = log
         self.reopenPause = reopenPause
         host = defaults.string(forKey: Self.hostKey) ?? ""
         levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
-        processorModel = defaults.string(forKey: Self.modelKey)
+        processorModel =
+            defaults.string(forKey: Self.modelKey)
             .flatMap { ProcessorModel(rawValue: $0) } ?? .cp650
     }
 
@@ -254,8 +259,10 @@ final class RemoteModel: ObservableObject {
     func turnKnob(byDegrees degrees: Double) {
         guard degrees.isFinite, isConnected else { return }
         knobRotation += degrees
-        let next = min(max((knobValue ?? fader) + degrees / Self.degreesPerUnit,
-                           Self.faderRange.lowerBound), Self.faderRange.upperBound)
+        let next = min(
+            max(
+                (knobValue ?? fader) + degrees / Self.degreesPerUnit,
+                Self.faderRange.lowerBound), Self.faderRange.upperBound)
         if knobValue != nil { knobValue = next }
         setFader(next)
     }
@@ -385,7 +392,7 @@ final class RemoteModel: ObservableObject {
     /// only the newest level rather than every step.
     private func pumpFader() {
         guard isConnected else {
-            pendingFader = nil          // the panel is unread: never send a level from before
+            pendingFader = nil  // the panel is unread: never send a level from before
             return
         }
         guard !faderInFlight, let value = pendingFader, let cp = processor else { return }
@@ -613,7 +620,8 @@ final class RemoteModel: ObservableObject {
         silentPolls = 0
         let faderRead = Self.faderLevel(faderReply)
         if let level = faderRead, mayApply(panel.fader, readStartedAt: start),
-           !isTurningKnob, faderIsSettled, fader != level {
+            !isTurningKnob, faderIsSettled, fader != level
+        {
             fader = level
         }
 
@@ -621,15 +629,17 @@ final class RemoteModel: ObservableObject {
         start = .now
         if processorModel == .cp650 {
             if let reply = await cp.get(Self.formatButtonParam), isCurrent(cp),
-               let wireValue = Int(reply), (0...7).contains(wireValue),
-               mayApply(Self.formatButtonParam, readStartedAt: start),
-               formatButton != wireValue + 1 {
+                let wireValue = Int(reply), (0...7).contains(wireValue),
+                mayApply(Self.formatButtonParam, readStartedAt: start),
+                formatButton != wireValue + 1
+            {
                 formatButton = wireValue + 1
             }
         } else if let inputs = panel.inputs, let reply = await cp.get(Self.inputParam), isCurrent(cp),
-                  let index = inputs.firstIndex(of: reply),
-                  mayApply(Self.inputParam, readStartedAt: start),
-                  formatButton != index + 1 {
+            let index = inputs.firstIndex(of: reply),
+            mayApply(Self.inputParam, readStartedAt: start),
+            formatButton != index + 1
+        {
             formatButton = index + 1
         }
 
@@ -659,7 +669,8 @@ final class RemoteModel: ObservableObject {
             if let presetReply {
                 macroMisses = 0
                 if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
-                   mayApply(Self.macroPresetParam, readStartedAt: start) {
+                    mayApply(Self.macroPresetParam, readStartedAt: start)
+                {
                     if macroNameNumber == number {
                         macroPreset = number
                     } else {
@@ -670,14 +681,15 @@ final class RemoteModel: ObservableObject {
                         guard isCurrent(cp) else { return }
                         if let nameReply {
                             if mayApply(nameParam, readStartedAt: start),
-                               mayApply(Self.macroPresetParam, readStartedAt: start) {
+                                mayApply(Self.macroPresetParam, readStartedAt: start)
+                            {
                                 macroPreset = number
                                 macroName = nameReply.trimmingCharacters(in: .whitespaces)
                                 macroNameNumber = number
                             }
                         } else {
                             macroReadMissed()
-                            macroPreset = number          // the number without a name, not the old name
+                            macroPreset = number  // the number without a name, not the old name
                             macroName = macros?.first { $0.number == number }?.name
                             macroNameNumber = macroName == nil ? nil : number
                         }
@@ -719,7 +731,7 @@ extension ProcessorModel {
         switch self {
         case .cp650: panelAspect
         case .cp750: 935 / 180
-        case .cp850: 483 / 89          // a 2U, 19-inch front
+        case .cp850: 483 / 89  // a 2U, 19-inch front
         case .cp950, .cp950a: 890 / 242
         }
     }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import CPRemote
 
 /// The Move to Applications alert: macOS ties the Local Network permission to

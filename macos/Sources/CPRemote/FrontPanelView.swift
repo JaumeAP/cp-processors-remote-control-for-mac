@@ -24,15 +24,15 @@ private struct Figure {
     func length(_ value: CGFloat) -> CGFloat { value * scale }
 }
 
-private extension View {
+extension View {
     /// Place the view over the figure rectangle `x1...x2` by `y1...y2`.
-    func placed(_ f: Figure, _ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat) -> some View {
+    fileprivate func placed(_ f: Figure, _ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat) -> some View {
         frame(width: f.length(x2 - x1), height: f.length(y2 - y1))
             .position(f.point((x1 + x2) / 2, (y1 + y2) / 2))
     }
 
     /// Centre the view on the figure point `(x, y)`.
-    func centred(_ f: Figure, _ x: CGFloat, _ y: CGFloat) -> some View {
+    fileprivate func centred(_ f: Figure, _ x: CGFloat, _ y: CGFloat) -> some View {
         position(f.point(x, y))
     }
 }
@@ -121,8 +121,11 @@ private struct PanelBody: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: f.length(6))
-                .fill(LinearGradient(colors: [Color(white: 0.70), Color(white: 0.58)],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.70), Color(white: 0.58)],
+                        startPoint: .top, endPoint: .bottom)
+                )
                 .placed(f, 112, 642, 1068, 922)
             // Ventilation louvres on both sides.
             ForEach(0..<11, id: \.self) { slat in
@@ -144,9 +147,14 @@ private struct PanelBody: View {
             // mark on the left and the model name on the right.
             ForEach([(262.0, 638.0), (642.0, 800.0), (805.0, 1030.0)], id: \.0) { part in
                 Rectangle()
-                    .fill(LinearGradient(colors: [Color(red: 0.93, green: 0.13, blue: 0.17),
-                                                  Color(red: 0.80, green: 0.08, blue: 0.12)],
-                                         startPoint: .top, endPoint: .bottom))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.93, green: 0.13, blue: 0.17),
+                                Color(red: 0.80, green: 0.08, blue: 0.12),
+                            ],
+                            startPoint: .top, endPoint: .bottom)
+                    )
                     .placed(f, part.0, 655, part.1, 688)
             }
             Text("DOLBY")
@@ -173,8 +181,10 @@ private struct PanelBody: View {
 private struct Louvre: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
-            .fill(LinearGradient(colors: [Color(white: 0.46), Color(white: 0.74)],
-                                 startPoint: .top, endPoint: .bottom))
+            .fill(
+                LinearGradient(
+                    colors: [Color(white: 0.46), Color(white: 0.74)],
+                    startPoint: .top, endPoint: .bottom))
     }
 }
 
@@ -184,8 +194,10 @@ private struct SetupDoor: View {
     var body: some View {
         RoundedRectangle(cornerRadius: f.length(4))
             .fill(Color(white: 0.66))
-            .overlay(RoundedRectangle(cornerRadius: f.length(4))
-                .stroke(Color(white: 0.35), lineWidth: f.length(1)))
+            .overlay(
+                RoundedRectangle(cornerRadius: f.length(4))
+                    .stroke(Color(white: 0.35), lineWidth: f.length(1))
+            )
             .accessibilityHidden(true)
     }
 }
@@ -226,9 +238,14 @@ private struct LCDView: View {
         ZStack {
             RoundedRectangle(cornerRadius: f.length(5)).fill(Color(white: 0.42))
             RoundedRectangle(cornerRadius: f.length(2))
-                .fill(LinearGradient(colors: [Color(red: 0.56, green: 0.76, blue: 0.27),
-                                              Color(red: 0.44, green: 0.64, blue: 0.2)],
-                                     startPoint: .top, endPoint: .bottom))
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.56, green: 0.76, blue: 0.27),
+                            Color(red: 0.44, green: 0.64, blue: 0.2),
+                        ],
+                        startPoint: .top, endPoint: .bottom)
+                )
                 .frame(width: f.length(150), height: f.length(50))
                 .overlay(
                     VStack(alignment: .leading, spacing: f.length(1.5)) {
@@ -300,10 +317,14 @@ private struct PanelButtonFace: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(glow.map { AnyShapeStyle($0) } ?? AnyShapeStyle(
-                    RadialGradient(colors: [Color(white: 0.92), Color(white: 0.66)],
-                                   center: .init(x: 0.35, y: 0.3),
-                                   startRadius: 0, endRadius: diameter * 0.6)))
+                .fill(
+                    glow.map { AnyShapeStyle($0) }
+                        ?? AnyShapeStyle(
+                            RadialGradient(
+                                colors: [Color(white: 0.92), Color(white: 0.66)],
+                                center: .init(x: 0.35, y: 0.3),
+                                startRadius: 0, endRadius: diameter * 0.6))
+                )
                 .shadow(color: glow ?? .clear, radius: diameter * 0.3)
             Circle().stroke(Color.black, lineWidth: diameter * 0.06)
         }
@@ -328,7 +349,9 @@ private struct FormatButton: View {
     private var selected: Bool { model.formatButton == number }
 
     var body: some View {
-        Button { model.pressButton(number) } label: {
+        Button {
+            model.pressButton(number)
+        } label: {
             ZStack {
                 PanelButtonFace(diameter: f.length(34), glow: selected ? .white : nil)
                 Text(silkscreen)
@@ -350,7 +373,9 @@ private struct MuteButton: View {
     let f: Figure
 
     var body: some View {
-        Button { model.toggleMute() } label: {
+        Button {
+            model.toggleMute()
+        } label: {
             Group {
                 if model.muted {
                     // Flashes red while muted, as on the unit.
@@ -407,9 +432,11 @@ private struct PowerButton: View {
         Capsule()
             .fill(Color(white: 0.88))
             .overlay(Capsule().stroke(Color.black, lineWidth: f.length(2)))
-            .overlay(Image(systemName: "power")
-                .font(.system(size: f.length(13), weight: .bold))
-                .foregroundStyle(Color(white: 0.1)))
+            .overlay(
+                Image(systemName: "power")
+                    .font(.system(size: f.length(13), weight: .bold))
+                    .foregroundStyle(Color(white: 0.1))
+            )
             .accessibilityHidden(true)
     }
 }
@@ -443,16 +470,22 @@ struct FaderKnob: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(RadialGradient(colors: [Color(white: 0.36), Color(white: 0.1)],
-                                     center: .init(x: 0.38, y: 0.3),
-                                     startRadius: 0, endRadius: diameter * 0.65))
+                .fill(
+                    RadialGradient(
+                        colors: [Color(white: 0.36), Color(white: 0.1)],
+                        center: .init(x: 0.38, y: 0.3),
+                        startRadius: 0, endRadius: diameter * 0.65)
+                )
                 .shadow(color: .black.opacity(0.8), radius: diameter * 0.05, y: diameter * 0.03)
             Circle().stroke(Color.black, lineWidth: diameter * 0.02)
             // Finger dimple; turns with the knob.
             Circle()
-                .fill(RadialGradient(colors: [Color(white: 0.08), Color(white: 0.28)],
-                                     center: .init(x: 0.4, y: 0.35),
-                                     startRadius: 0, endRadius: diameter * 0.13))
+                .fill(
+                    RadialGradient(
+                        colors: [Color(white: 0.08), Color(white: 0.28)],
+                        center: .init(x: 0.4, y: 0.35),
+                        startRadius: 0, endRadius: diameter * 0.13)
+                )
                 .overlay(Circle().stroke(Color(white: 0.45), lineWidth: diameter * 0.012))
                 .frame(width: diameter * 0.26, height: diameter * 0.26)
                 .offset(y: -diameter * 0.24)
