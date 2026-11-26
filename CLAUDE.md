@@ -21,9 +21,9 @@ build (`ARCHS=arm64`) is not a release. The app bundle carries the library in
 ## Building and testing: local only
 
 Verify every change on this Mac, never in CI. Before any build or test, run
-`macos/scripts/ensure-swift.sh` with `SWIFT_SCRATCH_DIR` set to the session
-scratchpad. It prints where the work runs: `local` (exit 0) means the system's
-own Swift 6 and a macOS SDK with SwiftUI and Network are present. Give
+`macos/scripts/ensure-swift.sh`; it installs nothing. `local` (exit 0) means the
+system's own Swift 6 and a macOS SDK with SwiftUI and Network are present;
+`unavailable` (exit 2) means this machine cannot build the app. Give
 `swift build` and `swift test` `--scratch-path <scratchpad>/swift-build`, in
 `macos/`. A local pass is enough to merge.
 
