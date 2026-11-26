@@ -186,8 +186,8 @@ extension RemoteModel {
             // reply, a recent change here keeps its value.
             guard mayApply(Self.macroPresetParam, readStartedAt: nameStart) else { return }
             macroPreset = number
-            macroName = macros?.first { $0.number == number }?.name
-            macroNameNumber = macroName == nil ? nil : number
+            macroName = nil
+            macroNameNumber = nil
             return
         }
         guard mayApply(nameParam, readStartedAt: nameStart),

@@ -33,16 +33,29 @@ private func read(_ param: String, _ model: ProcessorModel) async -> String? {
     return value
 }
 
+/// Read `param` until it is `expected`, at most `seconds`: the CP650 takes one
+/// connection, so a read right after a disconnect may find it still busy.
+private func readEventually(
+    _ param: String, _ model: ProcessorModel, equals expected: String, within seconds: Double = 8
+) async -> Bool {
+    let end = Monotonic.Instant.now + seconds
+    while Monotonic.Instant.now < end {
+        if await read(param, model) == expected { return true }
+        await Monotonic.sleep(for: 0.2)
+    }
+    return false
+}
+
 @MainActor
 private func connectedModel(_ processor: ProcessorModel) async throws -> RemoteModel {
     let suite = "CPRemoteTests.sim.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
     let model = RemoteModel(defaults: defaults, port: simulatorPort(processor), log: nil, reopenPause: 0.5)
     model.host = "127.0.0.1"
     model.choose(processor)
     await model.connect()
-    #expect(await waitFor { model.isConnected }, "the panel is read and the controls come on")
-    defaults.removePersistentDomain(forName: suite)
+    try #require(await waitFor { model.isConnected }, "the panel is read and the controls come on")
     return model
 }
 
@@ -55,12 +68,11 @@ struct SimulatorLinkTests {
         model.setFader(6.0)
         model.toggleMute()
         model.pressButton(2)
-        #expect(await waitFor { model.faderIsSettled })
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        #expect(await waitFor { model.faderIsSettled && model.sending.isEmpty }, "every send is through")
         await model.disconnect()
-        #expect(await read("cp750.sys.fader", .cp750) == "60")
-        #expect(await read("cp750.sys.mute", .cp750) == "1")
-        #expect(await read("cp750.sys.input_mode", .cp750) == "dig_2")
+        #expect(await readEventually("cp750.sys.fader", .cp750, equals: "60"))
+        #expect(await readEventually("cp750.sys.mute", .cp750, equals: "1"))
+        #expect(await readEventually("cp750.sys.input_mode", .cp750, equals: "dig_2"))
     }
 
     @Test func cp950ShowsTheSelectedMacro() async throws {
@@ -69,9 +81,9 @@ struct SimulatorLinkTests {
         #expect(model.macroPreset == 3)
         #expect(model.macroName == "Feature")
         model.selectMacro(4)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        #expect(await waitFor { model.sending.isEmpty }, "the macro send is through")
         await model.disconnect()
-        #expect(await read("sys.macro_preset", .cp950) == "4")
+        #expect(await readEventually("sys.macro_preset", .cp950, equals: "4"))
     }
 
     @Test func cp650ReadsTheFormatsAndSelectsAButton() async throws {
@@ -79,17 +91,18 @@ struct SimulatorLinkTests {
         #expect(model.fader == 7.0)
         #expect(await waitFor { model.programmedFormats != nil })
         model.pressButton(4)
-        try await Task.sleep(nanoseconds: 2_000_000_000)
+        #expect(await waitFor { model.sending.isEmpty }, "the button send is through")
         #expect(await model.test(address: "127.0.0.1").hasPrefix("OK: the connected CP650"))
         await model.disconnect()
-        try await Task.sleep(nanoseconds: 1_000_000_000)
-        #expect(await read("format_button", .cp650) == "3")
+        #expect(await readEventually("format_button", .cp650, equals: "3"))
     }
 
     @Test func testButtonReportsAMissingProcessor() async throws {
-        let model = RemoteModel(
-            defaults: try #require(UserDefaults(suiteName: "CPRemoteTests.sim.none")),
-            port: 9, log: nil)
+        let suite = "CPRemoteTests.sim.none"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        // Port 9 (discard) is closed on a normal Mac, so nothing answers there.
+        let model = RemoteModel(defaults: defaults, port: 9, log: nil)
         #expect(await model.test(address: "127.0.0.1", model: .cp750).hasPrefix("No connection"))
     }
 }

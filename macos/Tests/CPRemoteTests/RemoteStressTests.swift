@@ -8,26 +8,18 @@ import Testing
 
 @testable import CPRemote
 
-// MARK: - Helpers
-
-/// The defaults suite shared by the render tests is removed when the test
-/// process ends, so no test leaves a file in ~/Library/Preferences (the other
-/// suites are removed by their own tests).
-private let removeSharedSuitesAtExit: Void = {
-    atexit {
-        UserDefaults.standard.removePersistentDomain(forName: "CPRemoteTests.render")
-    }
-}()
-
 // MARK: - Tests
+
+// Every test removes its own defaults suite, so none leaves a file in
+// ~/Library/Preferences.
 
 /// The app's choices survive a restart: the model and the address are stored
 /// in the defaults and read back by a new model.
 @MainActor
 @Suite struct PersistenceTests {
-    @Test func modelAndAddressAreRemembered() {
+    @Test func modelAndAddressAreRemembered() throws {
         let suite = "CPRemoteTests.persistence"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         let first = RemoteModel(defaults: defaults, log: nil)
         first.host = "10.0.0.5"
@@ -38,13 +30,51 @@ private let removeSharedSuitesAtExit: Void = {
         defaults.removePersistentDomain(forName: suite)
     }
 
-    @Test func unknownStoredModelFallsBackToTheCP650() {
+    @Test func unknownStoredModelFallsBackToTheCP650() throws {
         let suite = "CPRemoteTests.fallback"
-        let defaults = UserDefaults(suiteName: suite)!
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         defaults.set("CP999", forKey: "processorModel")
         #expect(RemoteModel(defaults: defaults, log: nil).processorModel == .cp650)
         defaults.removePersistentDomain(forName: suite)
+    }
+
+    /// A stored CP950A reads back as the CP950 choice, so Setup's picker shows it.
+    @Test func storedCP950AIsTheCP950Choice() throws {
+        let suite = "CPRemoteTests.cp950a.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("CP950A", forKey: "processorModel")
+        let model = RemoteModel(defaults: defaults, log: nil)
+        #expect(model.processorModel == .cp950)
+        #expect(RemoteModel.choices.contains(model.processorModel))
+    }
+}
+
+/// Fader replies from the wire, in tenths, as levels.
+@MainActor
+@Suite struct FaderValueTests {
+    @Test func repliesInTenthsBecomeLevels() {
+        #expect(RemoteModel.faderLevel("70") == 7.0)
+        #expect(RemoteModel.faderLevel("55") == 5.5)
+        #expect(RemoteModel.faderLevel("0") == 0)
+    }
+
+    @Test func repliesOutsideTheRangeAreHeldAtItsEnds() {
+        #expect(RemoteModel.faderLevel("150") == 10)
+        #expect(RemoteModel.faderLevel("-5") == 0)
+    }
+
+    @Test func repliesThatAreNotFiniteNumbersAreRefused() {
+        #expect(RemoteModel.faderLevel(nil) == nil)
+        #expect(RemoteModel.faderLevel("nan") == nil)
+        #expect(RemoteModel.faderLevel("inf") == nil)
+        #expect(RemoteModel.faderLevel("error") == nil)
+    }
+
+    @Test func levelsAreRoundedToTenths() {
+        #expect(RemoteModel.clampFader(6.04) == 6.0)
+        #expect(RemoteModel.clampFader(6.06) == 6.1)
     }
 }
 
@@ -57,8 +87,10 @@ private let removeSharedSuitesAtExit: Void = {
 @Suite struct PanelRenderTests {
     @Test(arguments: [ProcessorModel.cp650, .cp750, .cp850, .cp950])
     func frontDrawsDeterministically(_ processor: ProcessorModel) throws {
-        _ = removeSharedSuitesAtExit
-        let model = RemoteModel(defaults: UserDefaults(suiteName: "CPRemoteTests.render")!, log: nil)
+        let suite = "CPRemoteTests.render.\(processor.rawValue)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = RemoteModel(defaults: defaults, log: nil)
         model.choose(processor)
         let width: CGFloat = 900
         let size = CGSize(width: width, height: width / processor.aspect)
@@ -156,9 +188,9 @@ private let removeSharedSuitesAtExit: Void = {
         #expect(RemoteModel.levelText(7.0, decibels: false) == "7.0")
     }
 
-    @Test func theChoiceIsRemembered() {
+    @Test func theChoiceIsRemembered() throws {
         let name = "CPRemoteTests.level.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
+        let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let first = RemoteModel(defaults: defaults, log: nil)
         #expect(first.levelInDecibels == false)
