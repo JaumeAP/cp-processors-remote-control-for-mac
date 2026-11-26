@@ -2,8 +2,7 @@
 // The released cpseries control client (CPSeries v1.1.0), as prebuilt
 // binaries (see RELEASE.md). On macOS, `CPSeries` links the universal static
 // library through CPSeries.xcframework and exposes its plain-C API
-// (cpseries_c.h) to Swift. The Windows x64 build sits in Artifacts/ as
-// released; SwiftPM does not link it.
+// (cpseries_c.h) to Swift.
 import PackageDescription
 
 let package = Package(
