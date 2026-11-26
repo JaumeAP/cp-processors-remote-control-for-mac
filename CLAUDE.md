@@ -1,5 +1,13 @@
 # CP Remote
 
+## Deployment target: macOS 12 for the whole repository
+
+Every Swift package in this repository targets macOS 12 (Monterey) as its
+minimum: `macos/Package.swift` and `cpseries-release/Package.swift`
+(`platforms: [.macOS(.v12)]`). Do not use APIs newer than macOS 12 without an
+availability check. The toolchain here (Swift 6.4.2) compiles no lower than
+macOS 12, so macOS 11 is not a target.
+
 ## Building and testing: local only
 
 Verify every change on this Mac, never in CI. Before any build or test, run
