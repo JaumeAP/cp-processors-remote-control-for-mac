@@ -60,7 +60,7 @@ struct SetupView: View {
             form.testing = false
             // SwiftUI on macOS has no live region: say the result.
             NSAccessibility.post(
-                element: NSApp,
+                element: NSApplication.shared,
                 notification: .announcementRequested,
                 userInfo: [.announcement: form.testResult, .priority: NSAccessibilityPriorityLevel.high.rawValue]
             )

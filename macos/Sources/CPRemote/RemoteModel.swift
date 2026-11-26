@@ -525,7 +525,7 @@ final class RemoteModel: ObservableObject {
         announcedConnected = isConnected
         let text = isConnected ? "Processor connected" : "Processor not answering; controls disabled"
         NSAccessibility.post(
-            element: NSApp,
+            element: NSApplication.shared,
             notification: .announcementRequested,
             userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue]
         )
