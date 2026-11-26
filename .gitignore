@@ -2,7 +2,3 @@
 .swiftpm/
 build/
 *.dmg
-common/**/bin/
-common/**/obj/
-windows/**/bin/
-windows/**/obj/

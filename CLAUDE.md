@@ -43,8 +43,7 @@ submodule; everyone else gets an empty `CPSeries/` folder.
 
 `cpseries-release/` is a SwiftPM package holding CPSeries' release `v1.1.0`
 binaries, unchanged: the macOS universal build (linked by SwiftPM through
-`CPSeries.xcframework`, product `CPSeries`, plain-C API) and the Windows x64
-build (kept in `Artifacts/windows-x64/`, not linked). Never edit those files
+`CPSeries.xcframework`, product `CPSeries`, plain-C API). Never edit those files
 here; `cpseries-release/RELEASE.md` lists their origin, hashes and how to
 refresh them. Test it with
 `swift test --scratch-path <scratchpad>/cpseries-release-build` in
