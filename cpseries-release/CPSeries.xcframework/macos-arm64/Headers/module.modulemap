@@ -1,4 +1,4 @@
 module CPSeriesC {
-    header "cpseries_c.h"
+    header "cpx50comms_c.h"
     export *
 }

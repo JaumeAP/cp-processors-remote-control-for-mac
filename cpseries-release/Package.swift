@@ -1,8 +1,8 @@
 // swift-tools-version:6.0
-// The released cpseries control client (CPSeries v1.1.0), as prebuilt
-// binaries (see RELEASE.md). On macOS, `CPSeries` links the universal static
+// The released cpx50comms control client (CPSeries v2.1.0), as prebuilt
+// binaries (see RELEASE.md). On macOS, `CPSeries` links the arm64 dynamic
 // library through CPSeries.xcframework and exposes its plain-C API
-// (cpseries_c.h) to Swift.
+// (cpx50comms_c.h) to Swift.
 import PackageDescription
 
 let package = Package(
@@ -16,7 +16,7 @@ let package = Package(
         .target(
             name: "CPSeries",
             dependencies: ["CPSeriesC"],
-            // The static library is C++ inside; its C API still needs libc++.
+            // The library is C++ inside; its C API still needs libc++.
             linkerSettings: [.linkedLibrary("c++")]
         ),
         .testTarget(name: "CPSeriesTests", dependencies: ["CPSeries"]),

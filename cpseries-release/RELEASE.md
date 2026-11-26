@@ -1,54 +1,62 @@
-# Vendored: the released cpseries client binaries (CPSeries v1.1.0)
+# Vendored: the released cpx50comms client binaries (CPSeries v2.1.0)
 
-These files come unchanged from the GitHub release `v1.1.0` of the private
-repository `JaumeAP/CPSeries` ("cpseries client (C++) 1.1.0 — macOS +
-Windows"), built there from `main` at `5ea82b6`. Do not edit or rebuild them
+The macOS files come from the GitHub release `v2.1.0` (tag commit `91855ad`)
+of the private repository `JaumeAP/CPSeries`, published 2026-11-25. They are
+the release assets and the headers of that tag, unchanged. Do not edit them
 here: refresh them from a newer CPSeries release.
 
-## Release archives
+The previous release, v1.1.0 (`libcpseries`, `cpseries_c.h`), was removed
+from this folder when the package moved to v2.1.0.
 
-| Archive | SHA-256 (checked against the release notes) |
+## Release assets (v2.1.0, macOS)
+
+| Asset | SHA-256 (checked against the release notes) |
 | --- | --- |
-| `cpseries-1.1.0-macos-universal.tar.gz` | `281f4071336bac9bcc59bd8933fd029ab6cb6479b6487deaffa170b388fd3629` |
-| `cpseries-1.1.0-windows-x64.zip` | `452b6934fe34efece4e6168bf784073b4e0e5b9b4440949786326e912f0d7461` |
+| `libcpx50comms.dylib` (CPX50COMMS_OMVLL + OBFUSCATE + SHARED) | `c04b1af8945572c449f7ed858de268d65411d2225398a83b56cde35a74432521` |
+| `processor_sim-obf` (arm64 + x86_64, obfuscated, stripped) | `94e644065719d4d5a41d2eb74573dbfd13246bcbc61e07e41863a69d90aa67da` |
+
+`processor_sim-obf` is not in this folder: the vendored simulator under
+`cpseries-simulator/` is still the v1.1.0 source and has not been migrated.
 
 ## Layout
 
-1. `Artifacts/macos-universal/` — the macOS archive, extracted as released:
-   `libcpseries.a`, `libcpseries.dylib`, `include/cpseries.hpp`,
-   `include/cpseries_c.h`, `LICENSE`, `USAGE.md`. macOS 11+, arm64 + x86_64.
-2. `CPSeries.xcframework/` — the macOS `libcpseries.a` and both headers,
-   wrapped so SwiftPM can link them (`binaryTarget` `CPSeriesC`). Its
-   `Info.plist` and `Headers/module.modulemap` are the only files written
-   here; the module map exposes only the plain-C header, `cpseries_c.h`.
-3. `Sources/CPSeries/` — re-exports `CPSeriesC`, and links libc++, which the
-   static library needs.
-4. `Tests/CPSeriesTests/` — link checks of the C API, with no network.
-
-Each `USAGE.md` describes its platform's contents and how to link them.
+1. `Artifacts/macos-universal/`: `libcpx50comms.dylib` (arm64 only), the
+   headers `include/cpx50comms.hpp`, `include/cpx50comms_c.h` and
+   `include/cpx50comms_export.h` from tag `v2.1.0` (`cpp/client/`), and
+   `LICENSE`.
+2. `CPSeries.xcframework/`: the arm64 `libcpx50comms.dylib` and the plain-C
+   header `cpx50comms_c.h` (with `cpx50comms_export.h`), wrapped so SwiftPM can
+   link them (`binaryTarget` `CPSeriesC`). Its `Info.plist` and
+   `macos-arm64/Headers/module.modulemap` are the only files written here; the
+   module map exposes only `cpx50comms_c.h`.
+3. `Sources/CPSeries/`: re-exports `CPSeriesC`.
+4. `Tests/CPSeriesTests/`: link checks of the C API, with no network.
 
 ## File hashes
 
 | File | SHA-256 |
 | --- | --- |
-| `macos-universal/libcpseries.a` | `7d8cdfd381a2baf038b3010ad67b853815e60370f725c8181f30815908d74f02` |
-| `macos-universal/libcpseries.dylib` | `0ffe8561f7533a7c9011cf5282a0e02254e06599829a0bf7640537e2a8cbb6e2` |
-| `cpseries.hpp` | `18cc1c4f2f36df5124f5c367bd163f29e3c192e6c9c87ebdfa0e6eeede81b908` |
-| `cpseries_c.h` | `f827cb72a24f999924ee1f0776ac63692331aec56e981e4268bb490380ad248b` |
+| `Artifacts/macos-universal/libcpx50comms.dylib` | `c04b1af8945572c449f7ed858de268d65411d2225398a83b56cde35a74432521` |
+| `Artifacts/macos-universal/include/cpx50comms_c.h` | `6eb5e13876273e852b6b06fcdb86125b817911cbedb385db18e9820247681f5b` |
+| `Artifacts/macos-universal/include/cpx50comms.hpp` | `b20823d45c76f54a44b1b40cf2f51d9e642d3334a681a427c36121e73d947338` |
+| `Artifacts/macos-universal/include/cpx50comms_export.h` | `cd50fe363877c5e51cfac4fd8a91f7d32da902720165227a6af020181c12a69d` |
 
-The copies inside `CPSeries.xcframework/` are byte-identical to the ones in
-`Artifacts/macos-universal/`.
+The copies inside `CPSeries.xcframework/macos-arm64/` are byte-identical to
+the ones in `Artifacts/macos-universal/`.
 
 ## Build and test
 
     cd cpseries-release && swift test --scratch-path <scratchpad>/cpseries-release-build
 
+The link step warns that `libcpx50comms.dylib` was built for a newer macOS
+than the package target (macOS 14.0).
+
 ## Refreshing
 
-1. Download the new release's archive (`gh release download <tag> -R
-   JaumeAP/CPSeries`) into the session scratchpad and check its SHA-256
+1. Download the new release's assets (`gh release download <tag> -R
+   JaumeAP/CPSeries`) into the session scratchpad and check their SHA-256
    against the release notes.
-2. Replace `Artifacts/macos-universal/` with the extracted contents.
-3. Copy `libcpseries.a`, `cpseries.hpp` and `cpseries_c.h` into
-   `CPSeries.xcframework/macos-arm64_x86_64/` (and `Headers/`), update this
-   file (tag, commit, hashes) and run the tests.
+2. Replace `Artifacts/macos-universal/` with the new contents.
+3. Copy the new `libcpx50comms.dylib` and `cpx50comms_c.h` into
+   `CPSeries.xcframework/macos-arm64/` (and `Headers/`), update this file (tag,
+   commit, hashes) and run the tests.
