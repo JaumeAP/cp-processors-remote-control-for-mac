@@ -15,10 +15,10 @@ private let simulatorsRunning = [ProcessorModel.cp650, .cp750, .cp950].allSatisf
 /// Wait until `condition` holds, at most `seconds`.
 @MainActor
 private func waitFor(_ seconds: Double = 12, _ condition: () -> Bool) async -> Bool {
-    let end = ContinuousClock.now + .seconds(seconds)
-    while ContinuousClock.now < end {
+    let end = Monotonic.Instant.now + seconds
+    while Monotonic.Instant.now < end {
         if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(50))
+        await Monotonic.sleep(for: 0.05)
     }
     return condition()
 }
@@ -55,7 +55,7 @@ struct SimulatorLinkTests {
         model.toggleMute()
         model.pressButton(2)
         #expect(await waitFor { model.faderIsSettled })
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         await model.disconnect()
         #expect(await read("cp750.sys.fader", .cp750) == "60")
         #expect(await read("cp750.sys.mute", .cp750) == "1")
@@ -68,7 +68,7 @@ struct SimulatorLinkTests {
         #expect(model.macroPreset == 3)
         #expect(model.macroName == "Feature")
         model.selectMacro(4)
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         await model.disconnect()
         #expect(await read("sys.macro_preset", .cp950) == "4")
     }
@@ -78,10 +78,10 @@ struct SimulatorLinkTests {
         #expect(model.fader == 7.0)
         #expect(await waitFor { model.programmedFormats != nil })
         model.pressButton(4)
-        try await Task.sleep(for: .seconds(2))
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         #expect(await model.test(address: "127.0.0.1").hasPrefix("OK: the connected CP650"))
         await model.disconnect()
-        try await Task.sleep(for: .seconds(1))
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         #expect(await read("format_button", .cp650) == "3")
     }
 

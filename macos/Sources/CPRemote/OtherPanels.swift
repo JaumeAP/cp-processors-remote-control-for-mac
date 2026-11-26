@@ -42,8 +42,8 @@ private struct Grid {
     func label(_ text: String, _ x: CGFloat, _ y: CGFloat, size: CGFloat, width: CGFloat = 0.2,
                weight: Font.Weight = .semibold, italic: Bool = false, color: Color) -> some View {
         Text(text)
-            .font(.system(size: h * size, weight: weight, design: .default))
-            .italic(italic)
+            .font(italic ? Font.system(size: h * size, weight: weight).italic()
+                         : Font.system(size: h * size, weight: weight))
             .foregroundStyle(color)
             .multilineTextAlignment(.center)
             .lineLimit(text.contains("\n") ? 2 : 1)

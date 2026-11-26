@@ -488,17 +488,20 @@ struct FaderKnob: View {
                 }
                 .updating($dragging) { _, state, _ in state = true }
         )
-        .onChange(of: dragging) { _, live in
+        .onChange(of: dragging) { live in
             if !live {
                 tracker.angle = nil
                 model.endKnobTurn()
             }
         }
         .focusable()
-        .onKeyPress(.upArrow) { model.stepKnob(up: true); return .handled }
-        .onKeyPress(.rightArrow) { model.stepKnob(up: true); return .handled }
-        .onKeyPress(.downArrow) { model.stepKnob(up: false); return .handled }
-        .onKeyPress(.leftArrow) { model.stepKnob(up: false); return .handled }
+        .onMoveCommand { direction in
+            switch direction {
+            case .up, .right: model.stepKnob(up: true)
+            case .down, .left: model.stepKnob(up: false)
+            default: break
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Main fader")
         .accessibilityValue(model.levelTextWithUnit)

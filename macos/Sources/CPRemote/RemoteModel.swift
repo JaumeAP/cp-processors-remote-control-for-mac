@@ -52,12 +52,12 @@ final class RemoteModel: ObservableObject {
     static let degreesPerUnit = 3 * 360 / (faderRange.upperBound - faderRange.lowerBound)
     /// How long a control changed here is shielded from poll replies: a reply
     /// read since shortly before the change may predate it on the processor.
-    private static let pollHoldOff: Duration = .milliseconds(1500)
+    private static let pollHoldOff: TimeInterval = 1.5
     /// Unanswered fader reads in a row after which the link is closed and
     /// opened again (a hung control session).
     private static let silentPollLimit = 2
     /// Seconds between two reads of the panel.
-    private static let pollInterval: Duration = .seconds(2)
+    private static let pollInterval: TimeInterval = 2
     private static let hostKey = "processorHost"
     private static let modelKey = "processorModel"
     /// The models the Setup menu offers. The CP950 choice covers the CP950A
@@ -138,7 +138,7 @@ final class RemoteModel: ObservableObject {
     private var pendingFader: Int?
     private var faderInFlight = false
     /// When each control was last changed here.
-    private var localChange: [String: ContinuousClock.Instant] = [:]
+    private var localChange: [String: Monotonic.Instant] = [:]
     /// Sends of each control not yet through.
     private var sending: [String: Int] = [:]
     /// `format_list` is read once per opened link.
@@ -424,7 +424,7 @@ final class RemoteModel: ObservableObject {
 
     /// When this app last closed a CP650 session to each address and port:
     /// the main link, a Test link. Shared by every model object of the app.
-    private static var cp650Closes: [String: ContinuousClock.Instant] = [:]
+    private static var cp650Closes: [String: Monotonic.Instant] = [:]
 
     /// Note that a session to `address` was just closed (CP650 only).
     private static func closed(_ address: String, _ port: UInt16, model: ProcessorModel) {
@@ -435,8 +435,8 @@ final class RemoteModel: ObservableObject {
     /// closed a session to `address`.
     private func pauseAfterClose(_ address: String, _ port: UInt16, model: ProcessorModel) async {
         guard model == .cp650, let closed = Self.cp650Closes["\(address):\(port)"] else { return }
-        let left = closed + .seconds(reopenPause) - .now
-        if left > .zero { try? await Task.sleep(for: left) }
+        let left = (closed + reopenPause) - Monotonic.Instant.now
+        await Monotonic.sleep(for: left)
     }
 
     private func connectNow() async {
@@ -524,7 +524,11 @@ final class RemoteModel: ObservableObject {
         guard isConnected != announcedConnected else { return }
         announcedConnected = isConnected
         let text = isConnected ? "Processor connected" : "Processor not answering; controls disabled"
-        AccessibilityNotification.Announcement(text).post()
+        NSAccessibility.post(
+            element: NSApp,
+            notification: .announcementRequested,
+            userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue]
+        )
     }
 
     // MARK: - Polling
@@ -536,7 +540,7 @@ final class RemoteModel: ObservableObject {
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.pollCycle(cp)
-                try? await Task.sleep(for: Self.pollInterval)
+                await Monotonic.sleep(for: Self.pollInterval)
             }
         }
     }
@@ -579,7 +583,7 @@ final class RemoteModel: ObservableObject {
     /// A reply to a read that started at `start` may update the panel only
     /// if no send of that control is under way, and the control was not
     /// changed here since just before the read.
-    private func mayApply(_ param: String, readStartedAt start: ContinuousClock.Instant) -> Bool {
+    private func mayApply(_ param: String, readStartedAt start: Monotonic.Instant) -> Bool {
         if sending[param] != nil { return false }
         if let changed = localChange[param], changed > start - Self.pollHoldOff { return false }
         return true
@@ -587,7 +591,7 @@ final class RemoteModel: ObservableObject {
 
     private func refresh(_ cp: ProcessorLink) async {
         let panel = processorModel.panel
-        var start = ContinuousClock.now
+        var start = Monotonic.Instant.now
         let faderReply = await cp.get(panel.fader)
         guard isCurrent(cp) else { return }
         guard let faderReply else {
