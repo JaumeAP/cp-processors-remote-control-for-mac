@@ -18,7 +18,7 @@ released cpseries library (`../cpseries-release`, its plain-C API).
    channel uses, shown in Setup.
 5. `PanelProfile` (in `RemoteModel`): each model's wire names and what its
    front offers (input buttons, the fader's lowest value, macros).
-6. `FrontPanelView` (CP650), `OtherPanels` (CP750, CP850, CP950 / CP950A):
+6. `FrontPanelView` (CP650), `CP750Panel`, `CP850Panel`, `CP950Panel` (CP950 / CP950A), with `PanelGrid` for the shared drawing:
    the drawn fronts, after the manuals' figures (the CP850 after Dolby's
    product photos). Positions are fractions of the panel, so they scale with
    the window.

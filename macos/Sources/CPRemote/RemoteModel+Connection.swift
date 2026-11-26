@@ -105,6 +105,18 @@ extension RemoteModel {
         startPolling(link)
     }
 
+    /// Close the link and open it again. The CP650 takes one connection, so
+    /// its old session is closed, recorded and given the reopen pause before
+    /// the new one opens. Other models keep the library's own reconnect, which
+    /// keeps the queued sends.
+    func reopenLink(_ link: ProcessorLink) async -> Bool {
+        guard link.model == .cp650 else { return await link.reconnect() }
+        await link.disconnect()
+        Self.closed(link.host, link.port, model: link.model)
+        await pauseAfterClose(link.host, link.port, model: link.model)
+        return await link.connect()
+    }
+
     func reconnectNow() async {
         guard let link = processor, processorHost == trimmedHost, link.model == processorModel else {
             return await connectNow()
@@ -113,7 +125,7 @@ extension RemoteModel {
         markUnread("reconnect requested")
         formatListDue = true
         resetMacroReads()
-        linkOpened = await link.reconnect()
+        linkOpened = await reopenLink(link)
         guard processor === link else { return }
         if !linkOpened { note("reconnect failed: \(await link.lastError)") }
     }
@@ -128,6 +140,12 @@ extension RemoteModel {
         let closedHost = processorHost
         processor = nil
         processorHost = nil
+        // Nothing of the old unit may show or count after the disconnect.
+        muted = false
+        formatButton = nil
+        localChange = [:]
+        sending = [:]
+        silentPolls = 0
         programmedFormats = nil
         macroName = nil
         macroNameNumber = nil
@@ -168,8 +186,12 @@ extension RemoteModel {
         sending[param, default: 0] += 1
         Task {
             let delivered = await operation()
-            sending[param, default: 1] -= 1
-            if sending[param] == 0 { sending[param] = nil }
+            // A send from an earlier link finishes after a reconnect has reset
+            // the counters: it must not change the current link's counters.
+            if processor === link {
+                sending[param, default: 1] -= 1
+                if sending[param] == 0 { sending[param] = nil }
+            }
             if !delivered, processor === link { note("\(param) not sent: \(await link.lastError)") }
         }
     }

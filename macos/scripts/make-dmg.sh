@@ -10,7 +10,7 @@
 # The bundle (with the hardened runtime) and the disk image are ad-hoc signed
 # (no Developer ID, not notarized): on another Mac, Gatekeeper warns the first
 # time it opens (on macOS 15 and later, System Settings, Privacy & Security,
-# Open Anyway). The release workflow (.github/workflows/macos.yml) runs this script on a Mac runner.
+# Open Anyway). Releases are built locally on a Mac, never in CI (see CLAUDE.md).
 set -euo pipefail
 
 VERSION="1.1.1"
@@ -28,7 +28,7 @@ out="$(cd "$out" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# A universal binary: Apple silicon and Intel Macs on macOS 14 or later.
+# A universal binary: Apple silicon and Intel Macs on macOS 12 or later.
 arch_flags=()
 for arch in $ARCHS; do arch_flags+=(--arch "$arch"); done
 (cd "$here" && swift build -c release "${arch_flags[@]}")
@@ -40,8 +40,16 @@ for arch in $ARCHS; do
 done
 
 app="$work/stage/$APP_NAME.app"
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks"
 cp "$binary" "$app/Contents/MacOS/$APP_NAME"
+# The binary links the cpx50comms library by its @rpath install name. The
+# library goes into Contents/Frameworks, and the binary looks for it there;
+# without that the app dies at launch on any Mac without the build tree.
+library="$(dirname "$binary")/libcpx50comms.dylib"
+[ -f "$library" ] || { echo "no cpx50comms library next to the binary: $library" >&2; exit 1; }
+cp "$library" "$app/Contents/Frameworks/libcpx50comms.dylib"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$app/Contents/MacOS/$APP_NAME"
+codesign --force --options runtime --sign - "$app/Contents/Frameworks/libcpx50comms.dylib"
 cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,7 +62,7 @@ cat > "$app/Contents/Info.plist" <<EOF
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleExecutable</key><string>$APP_NAME</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
+    <key>LSMinimumSystemVersion</key><string>12.0</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Jaume Puig. All rights reserved.</string>
     <key>NSLocalNetworkUsageDescription</key><string>CP Remote connects to Dolby cinema processors on your local network to read their state and send their controls.</string>

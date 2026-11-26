@@ -55,7 +55,6 @@ struct PanelGrid {
     }
 }
 
-let frontGrey = Color(white: 0.74)
 let frontDark = Color(white: 0.09)
 let keyCap = RadialGradient(
     colors: [Color(white: 0.9), Color(white: 0.55)],

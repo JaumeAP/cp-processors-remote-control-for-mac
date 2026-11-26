@@ -98,8 +98,9 @@ extension RemoteModel {
         silentPolls = 0
         formatListDue = true
         resetMacroReads()
-        linkReopens += 1
-        _ = await link.reconnect()
+        // The user may have disconnected while the error text was read.
+        guard isCurrent(link) else { return }
+        _ = await reopenLink(link)
     }
 
     func applyFader(_ level: Double?, panel: PanelProfile, start: Monotonic.Instant) {
@@ -181,7 +182,10 @@ extension RemoteModel {
         guard isCurrent(link) else { return }
         guard let nameReply else {
             macroReadMissed()
-            macroPreset = number  // the number without a name, not the old name
+            // The number without a name, not the old name; as with a named
+            // reply, a recent change here keeps its value.
+            guard mayApply(Self.macroPresetParam, readStartedAt: nameStart) else { return }
+            macroPreset = number
             macroName = macros?.first { $0.number == number }?.name
             macroNameNumber = macroName == nil ? nil : number
             return

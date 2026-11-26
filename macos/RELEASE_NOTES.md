@@ -1,6 +1,7 @@
 # CP Remote release notes
 
-## 1.1.1
+## 1.1.1 (2026-11-26)
+- The app bundle now carries the cpx50comms library, so it starts outside the build tree.
 - CP Remote now runs from macOS 12.0 (Monterey) onward. Version 1.1.0 needed a newer macOS.
 - The processor link uses the cpx50comms library of CPSeries v2.1.0, the release the app is built against.
 

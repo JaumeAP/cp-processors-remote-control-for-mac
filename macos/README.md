@@ -19,7 +19,7 @@ CP950's front).
 
 ## Requirements
 
-1. macOS 14 or later.
+1. macOS 12 or later.
 2. Swift 6 (the Command Line Tools are enough; Xcode is not required).
 
 ## Build and run
@@ -55,8 +55,7 @@ swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/us
 The tests need no processor. `SimulatorLinkTests` also run the model over the
 real library when `CPSIM_PORT_CP650`, `CPSIM_PORT_CP750` and
 `CPSIM_PORT_CP950` name the ports of running CPSeries simulators
-(`processor_sim`, built from `CPSeries/cpp/processor_sim.cpp` outside the
-repository); without them they are skipped.
+(`processor_sim`, which is not in this repository); without them they are skipped.
 
 ## Layout
 

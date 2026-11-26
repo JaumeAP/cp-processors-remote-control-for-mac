@@ -7,7 +7,7 @@
 #      through xcrun) at version 6 or newer, with a macOS SDK that carries
 #      SwiftUI and Network. If both are there, build and test locally: prints
 #      "local" and exits 0. If not, nothing is installed: prints "ci" and
-#      exits 2, so the macOS GitHub workflow (macos.yml) does the work.
+#      exits 2. Nothing runs in CI: the Mac that has no SDK must get one.
 #   2. On Linux: a system Swift on PATH at version 6 or newer. If there is
 #      none, Swift $SWIFT_VERSION is downloaded from download.swift.org and
 #      unpacked in the session scratchpad, $SWIFT_SCRATCH_DIR/swift-<version>,
