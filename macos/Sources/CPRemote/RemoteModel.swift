@@ -155,8 +155,6 @@ final class RemoteModel: ObservableObject {
     /// `format_list` is read once per opened link.
     var formatListDue = true
     var silentPolls = 0
-    /// Hung links reopened (for tests).
-    var linkReopens = 0
     var announcedConnected = false
 
     /// Where the IP address is kept, and the TCP port (nil: the model's own).

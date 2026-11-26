@@ -14,9 +14,9 @@ A published app is a universal binary (arm64 and x86_64).
 `macos/scripts/make-dmg.sh` builds both by default (`ARCHS="arm64 x86_64"`);
 `check-dmg.sh` checks the image. Build it locally and publish the image
 yourself: no CI builds releases. The vendored cpx50comms library in
-`cpseries-release/` must then include an x86_64 slice. Until it does, the
-universal build fails at link time, and a single-architecture build
-(`ARCHS=arm64`) is not a release.
+`cpseries-release/` includes the x86_64 slice since v2.2.0. A single-architecture
+build (`ARCHS=arm64`) is not a release. The app bundle carries the library in
+`Contents/Frameworks`, and `check-dmg.sh` verifies that the binary finds it there.
 
 ## Building and testing: local only
 
@@ -33,7 +33,7 @@ the processors over TCP/IP through the vendored cpseries library
 
 ## cpseries-release: the vendored client library
 
-`cpseries-release/` is a SwiftPM package holding CPSeries' release `v2.1.0`
+`cpseries-release/` is a SwiftPM package holding CPSeries' release `v2.2.0`
 binaries, unchanged: the macOS build (linked by SwiftPM through
 `CPSeries.xcframework`, product `CPSeries`, plain-C API). Never edit those files
 here; `cpseries-release/RELEASE.md` lists their origin, hashes and how to
@@ -68,12 +68,13 @@ system toolchain (Xcode 27 here), plus the SwiftLint release binary in
 6. Coverage: `swift test --enable-code-coverage` in `macos/`, then read the
    per-file report. Shows which code has no test at all.
    Status: not yet run.
-7. Format: `swift-format lint --recursive Sources Tests` in `macos/`. No
-   `.swift-format` file exists, so the defaults apply.
-   Status: available (Xcode toolchain), not yet run.
-8. Lint: `swiftlint lint` in `macos/`. No `.swiftlint.yml` exists, so the
-   defaults apply.
-   Status: installed (0.65.1), not configured.
+7. Format: `swift-format lint --recursive --configuration ../.swift-format Sources Tests`
+   in `macos/`, with the repository's `.swift-format` (4-space indent, 120 columns).
+   Status: 0 warnings.
+8. Lint: `swiftlint lint --config ../.swiftlint.yml Sources Tests` in `macos/`. The
+   repository's `.swiftlint.yml` turns off `trailing_comma` and `opening_brace`,
+   which conflict with swift-format.
+   Status: 0 findings.
 9. Security patterns: `uvx semgrep --config p/swift` (registry config not yet
    checked to exist for Swift).
    Status: semgrep installed, Swift rules not verified.

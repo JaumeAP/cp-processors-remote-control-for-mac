@@ -29,9 +29,18 @@ check test -x "$app/Contents/MacOS/CPRemote"
 # Universal: it must run on Apple silicon and on Intel Macs.
 check lipo "$app/Contents/MacOS/CPRemote" -verify_arch arm64
 check lipo "$app/Contents/MacOS/CPRemote" -verify_arch x86_64
+# The cpx50comms library ships inside the app, and the binary finds it there:
+# the rpath points at Contents/Frameworks and the install name is the one used.
+library="$app/Contents/Frameworks/libcpx50comms.dylib"
+check test -f "$library"
+check lipo "$library" -verify_arch arm64
+check lipo "$library" -verify_arch x86_64
+check bash -c 'otool -l "$1" | grep -q "path @executable_path/../Frameworks"' _ "$app/Contents/MacOS/CPRemote"
+check bash -c 'otool -L "$1" | grep -q "@rpath/libcpx50comms.dylib"' _ "$app/Contents/MacOS/CPRemote"
+check test "$(defaults read "$plist" LSMinimumSystemVersion)" = "12.0"
 check test -s "$app/Contents/Resources/AppIcon.icns"
 check test -n "$(defaults read "$plist" NSLocalNetworkUsageDescription)"
-check codesign --verify --strict "$app"
+check codesign --verify --deep --strict "$app"
 check bash -c 'codesign -d --verbose=2 "$1" 2>&1 | grep -q "flags=.*runtime"' _ "$app"
 check test -L "$mount/Applications"
 check test -s "$mount/Release Notes.pdf"

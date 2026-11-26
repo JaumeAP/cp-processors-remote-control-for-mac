@@ -66,11 +66,6 @@ import Foundation
             await perform(()) { cpx50comms_disconnect($0) }
         }
 
-        /// The link status: one of the CPX50COMMS_* values.
-        var status: Int32 {
-            get async { await perform(Int32(CPX50COMMS_MISSING)) { cpx50comms_status($0) } }
-        }
-
         /// Ask for `param` and wait for its value; nil when there is none (a
         /// timeout, `error`, a lost link). `timeout` 0: the library's own.
         func get(_ param: String, timeout: Double = 0) async -> String? {
@@ -91,9 +86,11 @@ import Foundation
         }
 
         /// Send `param` = `value` and wait until it is through. False when the
-        /// link was down and could not be re-opened, or the value cannot be sent.
+        /// link is not up (nothing is queued then, so nothing is sent later), or
+        /// the value cannot be sent.
         func set(_ param: String, _ value: Int) async -> Bool {
             await perform(false) { handle in
+                guard cpx50comms_status(handle) == Int32(CPX50COMMS_OK) else { return false }
                 guard cpx50comms_set_int(handle, param, Int64(value)) == 1 else { return false }
                 cpx50comms_run(handle)
                 return true
@@ -102,6 +99,7 @@ import Foundation
 
         func set(_ param: String, _ value: String) async -> Bool {
             await perform(false) { handle in
+                guard cpx50comms_status(handle) == Int32(CPX50COMMS_OK) else { return false }
                 guard cpx50comms_set_text(handle, param, value) == 1 else { return false }
                 cpx50comms_run(handle)
                 return true
@@ -131,8 +129,6 @@ import Foundation
         func connect() async -> Bool { false }
         func reconnect() async -> Bool { false }
         func disconnect() async {}
-        /// 3 is CPX50COMMS_MISSING: no link.
-        var status: Int32 { get async { 3 } }
         func get(_ param: String, timeout: Double = 0) async -> String? { nil }
         func set(_ param: String, _ value: Int) async -> Bool { false }
         func set(_ param: String, _ value: String) async -> Bool { false }
