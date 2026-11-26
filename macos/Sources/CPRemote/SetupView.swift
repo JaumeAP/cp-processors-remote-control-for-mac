@@ -17,7 +17,8 @@ struct SetupView: View {
                     Text(RemoteModel.choiceName(choice)).tag(choice)
                 }
             }
-            LabeledContent("Processor IP") {
+            HStack {
+                Text("Processor IP")
                 TextField("192.168.1.50", text: $form.draft)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 220)
@@ -58,7 +59,11 @@ struct SetupView: View {
             form.testResult = await model.test(address: form.draft, model: form.choice)
             form.testing = false
             // SwiftUI on macOS has no live region: say the result.
-            AccessibilityNotification.Announcement(form.testResult).post()
+            NSAccessibility.post(
+                element: NSApp,
+                notification: .announcementRequested,
+                userInfo: [.announcement: form.testResult, .priority: NSAccessibilityPriorityLevel.high.rawValue]
+            )
         }
     }
 

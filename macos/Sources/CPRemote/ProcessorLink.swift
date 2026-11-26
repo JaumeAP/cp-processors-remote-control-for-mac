@@ -2,9 +2,17 @@
 // (cpseries-release, its plain-C API). The library blocks on the network, so
 // every call runs on the link's own serial queue, never on the main actor,
 // and the handle is touched only on that queue.
+//
+// Only the cpx50comms library is imported (the CPSeriesC module). When that
+// module is not available to the build, the link compiles to a stub: it never
+// connects and every query returns nothing.
 
-import CPSeries
+#if canImport(CPSeriesC)
+import CPSeriesC
+#endif
 import Foundation
+
+#if canImport(CPSeriesC)
 
 final class ProcessorLink: @unchecked Sendable {
     let host: String
@@ -102,3 +110,30 @@ final class ProcessorLink: @unchecked Sendable {
         get async { await perform("") { String(cString: cpx50comms_last_error($0)) } }
     }
 }
+
+#else
+
+/// Stub used when the cpx50comms library is not available to the build.
+final class ProcessorLink: @unchecked Sendable {
+    let host: String
+    let port: UInt16
+    let model: ProcessorModel
+
+    init(host: String, port: UInt16?, model: ProcessorModel) {
+        self.host = host
+        self.port = port ?? model.defaultPort
+        self.model = model
+    }
+
+    func connect() async -> Bool { false }
+    func reconnect() async -> Bool { false }
+    func disconnect() async {}
+    /// 3 is CPX50COMMS_MISSING: no link.
+    var status: Int32 { get async { 3 } }
+    func get(_ param: String, timeout: Double = 0) async -> String? { nil }
+    func set(_ param: String, _ value: Int) async -> Bool { false }
+    func set(_ param: String, _ value: String) async -> Bool { false }
+    var lastError: String { get async { "cpx50comms library not available" } }
+}
+
+#endif

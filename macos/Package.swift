@@ -7,7 +7,7 @@ import PackageDescription
 
 let package = Package(
     name: "CPRemote",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v12)],
     products: [
         .executable(name: "CPRemote", targets: ["CPRemote"]),
     ],

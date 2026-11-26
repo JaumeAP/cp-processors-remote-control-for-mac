@@ -49,7 +49,7 @@ struct CPRemoteApp: App {
     private static let moveToApplicationsMessage = "CP Remote is running from the disk image or from the folder it was downloaded to. a copy run from the disk image is gone once the image is ejected, and macOS may treat the app as a new one and ask again for its permissions. Quit it, drag CP Remote to the Applications folder and open it from there."
 
     var body: some Scene {
-        Window("CP Remote", id: "main") {
+        WindowGroup("CP Remote", id: "main") {
             FrontPanelView(model: model)
                 .sheet(isPresented: $model.showSetup) { SetupView(model: model) }
                 .alert("Move CP Remote to Applications", isPresented: $model.showMoveToApplicationsAlert) {
@@ -58,12 +58,11 @@ struct CPRemoteApp: App {
                     Text(Self.moveToApplicationsMessage)
                 }
                 .task {
-                    NSApplication.shared.activate()
+                    NSApplication.shared.activate(ignoringOtherApps: true)
                     await model.connect()   // with no address saved, opens Setup
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentMinSize)
         .commands {
             CommandMenu("Level") {
                 Button("Level Up") { model.stepKnob(up: true) }
