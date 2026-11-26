@@ -17,23 +17,25 @@ let panelAspect: CGFloat = figure.width / figure.height
 private struct Figure {
     let scale: CGFloat
 
-    func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-        CGPoint(x: (x - figure.minX) * scale, y: (y - figure.minY) * scale)
+    func point(_ xCoord: CGFloat, _ yCoord: CGFloat) -> CGPoint {
+        CGPoint(x: (xCoord - figure.minX) * scale, y: (yCoord - figure.minY) * scale)
     }
 
     func length(_ value: CGFloat) -> CGFloat { value * scale }
 }
 
 extension View {
-    /// Place the view over the figure rectangle `x1...x2` by `y1...y2`.
-    fileprivate func placed(_ f: Figure, _ x1: CGFloat, _ y1: CGFloat, _ x2: CGFloat, _ y2: CGFloat) -> some View {
-        frame(width: f.length(x2 - x1), height: f.length(y2 - y1))
-            .position(f.point((x1 + x2) / 2, (y1 + y2) / 2))
+    /// Place the view over the figure rectangle `left...right` by `top...bottom`.
+    fileprivate func placed(
+        _ mapping: Figure, _ left: CGFloat, _ top: CGFloat, _ right: CGFloat, _ bottom: CGFloat
+    ) -> some View {
+        frame(width: mapping.length(right - left), height: mapping.length(bottom - top))
+            .position(mapping.point((left + right) / 2, (top + bottom) / 2))
     }
 
-    /// Centre the view on the figure point `(x, y)`.
-    fileprivate func centred(_ f: Figure, _ x: CGFloat, _ y: CGFloat) -> some View {
-        position(f.point(x, y))
+    /// Centre the view on the figure point `(xCoord, yCoord)`.
+    fileprivate func centred(_ mapping: Figure, _ xCoord: CGFloat, _ yCoord: CGFloat) -> some View {
+        position(mapping.point(xCoord, yCoord))
     }
 }
 
@@ -70,44 +72,44 @@ struct CP650Panel: View {
     @ObservedObject var model: RemoteModel
 
     var body: some View {
-        GeometryReader { geo in
-            let f = Figure(scale: geo.size.width / figure.width)
+        GeometryReader { geometry in
+            let mapping = Figure(scale: geometry.size.width / figure.width)
             ZStack(alignment: .topLeading) {
-                PanelBody(f: f)
+                PanelBody(mapping: mapping)
 
                 // Front-panel LCD, menu buttons and mute (left section).
-                LCDView(model: model, f: f)
-                    .placed(f, 308, 690, 560, 750)
-                SectionLabel(text: "menu", f: f, lineFrom: 368, lineTo: 496)
-                    .centred(f, 432, 767)
-                DecorativeButton(symbol: "square.and.pencil", f: f).centred(f, 380, 790)
-                DecorativeButton(symbol: "list.bullet.indent", f: f).centred(f, 432, 790)
-                DecorativeButton(text: "OK", f: f).centred(f, 484, 790)
-                SectionLabel(text: "mute", f: f, lineFrom: 602, lineTo: 602)
-                    .centred(f, 602, 767)
-                MuteButton(model: model, f: f).centred(f, 602, 790)
-                SetupDoor(f: f).placed(f, 272, 815, 628, 916)
+                LCDView(model: model, mapping: mapping)
+                    .placed(mapping, 308, 690, 560, 750)
+                SectionLabel(text: "menu", mapping: mapping, lineFrom: 368, lineTo: 496)
+                    .centred(mapping, 432, 767)
+                DecorativeButton(symbol: "square.and.pencil", mapping: mapping).centred(mapping, 380, 790)
+                DecorativeButton(symbol: "list.bullet.indent", mapping: mapping).centred(mapping, 432, 790)
+                DecorativeButton(text: "OK", mapping: mapping).centred(mapping, 484, 790)
+                SectionLabel(text: "mute", mapping: mapping, lineFrom: 602, lineTo: 602)
+                    .centred(mapping, 602, 767)
+                MuteButton(model: model, mapping: mapping).centred(mapping, 602, 790)
+                SetupDoor(mapping: mapping).placed(mapping, 272, 815, 628, 916)
 
                 // Level display, projector lamps and the main fader knob (centre).
-                LevelDisplay(model: model, f: f)
-                    .placed(f, 683, 696, 768, 746)
-                KnobCradle(f: f).centred(f, 714, 822)
-                ProjectorLamps(f: f).centred(f, 722, 758)
-                FaderKnob(model: model, diameter: f.length(116))
-                    .centred(f, 714, 822)
+                LevelDisplay(model: model, mapping: mapping)
+                    .placed(mapping, 683, 696, 768, 746)
+                KnobCradle(mapping: mapping).centred(mapping, 714, 822)
+                ProjectorLamps(mapping: mapping).centred(mapping, 722, 758)
+                FaderKnob(model: model, diameter: mapping.length(116))
+                    .centred(mapping, 714, 822)
 
                 // Format buttons and power (right section).
-                RoundedRectangle(cornerRadius: f.length(12))
-                    .stroke(Color(white: 0.4), lineWidth: f.length(1.5))
-                    .placed(f, 815, 695, 1018, 803)
+                RoundedRectangle(cornerRadius: mapping.length(12))
+                    .stroke(Color(white: 0.4), lineWidth: mapping.length(1.5))
+                    .placed(mapping, 815, 695, 1018, 803)
                     .accessibilityHidden(true)
-                SectionLabel(text: "format", f: f, lineFrom: 840, lineTo: 997)
-                    .centred(f, 918, 750)
+                SectionLabel(text: "format", mapping: mapping, lineFrom: 840, lineTo: 997)
+                    .centred(mapping, 918, 750)
                 ForEach(0..<8, id: \.self) { index in
-                    FormatButton(model: model, number: index + 1, f: f)
-                        .centred(f, [838, 891, 944, 997][index % 4], index < 4 ? 724 : 777)
+                    FormatButton(model: model, number: index + 1, mapping: mapping)
+                        .centred(mapping, [838, 891, 944, 997][index % 4], index < 4 ? 724 : 777)
                 }
-                PowerButton(f: f).placed(f, 910, 862, 980, 890)
+                PowerButton(mapping: mapping).placed(mapping, 910, 862, 980, 890)
             }
         }
     }
@@ -116,33 +118,33 @@ struct CP650Panel: View {
 // MARK: - Body
 
 private struct PanelBody: View {
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: f.length(6))
+            RoundedRectangle(cornerRadius: mapping.length(6))
                 .fill(
                     LinearGradient(
                         colors: [Color(white: 0.70), Color(white: 0.58)],
                         startPoint: .top, endPoint: .bottom)
                 )
-                .placed(f, 112, 642, 1068, 922)
+                .placed(mapping, 112, 642, 1068, 922)
             // Ventilation louvres on both sides.
             ForEach(0..<11, id: \.self) { slat in
-                let y = 652 + CGFloat(slat) * 24.6
-                Louvre().placed(f, 114, y, 262, y + 13)
-                Louvre().placed(f, 1030, y, 1066, y + 13)
+                let top = 652 + CGFloat(slat) * 24.6
+                Louvre().placed(mapping, 114, top, 262, top + 13)
+                Louvre().placed(mapping, 1030, top, 1066, top + 13)
             }
             // The black rack ears at both ends, each with two white slots.
-            Rectangle().fill(Color.black).placed(f, 112, 642, 145, 922)
-            Rectangle().fill(Color.black).placed(f, 1035, 642, 1068, 922)
+            Rectangle().fill(Color.black).placed(mapping, 112, 642, 145, 922)
+            Rectangle().fill(Color.black).placed(mapping, 1035, 642, 1068, 922)
             ForEach([120.0, 1043.0], id: \.self) { slotX in
                 ForEach([716.0, 846.0], id: \.self) { slotY in
-                    Capsule().fill(Color.white).placed(f, slotX, slotY, slotX + 17, slotY + 11)
+                    Capsule().fill(Color.white).placed(mapping, slotX, slotY, slotX + 17, slotY + 11)
                 }
             }
             // The face between the louvres.
-            Rectangle().fill(faceColor).placed(f, 262, 645, 1030, 920)
+            Rectangle().fill(faceColor).placed(mapping, 262, 645, 1030, 920)
             // Header band in three parts, red as on the unit, with the Dolby
             // mark on the left and the model name on the right.
             ForEach([(262.0, 638.0), (642.0, 800.0), (805.0, 1030.0)], id: \.0) { part in
@@ -155,24 +157,28 @@ private struct PanelBody: View {
                             ],
                             startPoint: .top, endPoint: .bottom)
                     )
-                    .placed(f, part.0, 655, part.1, 688)
+                    .placed(mapping, part.0, 655, part.1, 688)
             }
             Text("DOLBY")
-                .font(.system(size: f.length(9), weight: .heavy))
+                .font(.system(size: mapping.length(9), weight: .heavy))
                 .foregroundStyle(.white)
-                .padding(.horizontal, f.length(5))
-                .overlay(RoundedRectangle(cornerRadius: f.length(1.5)).stroke(Color.white, lineWidth: f.length(1)))
-                .centred(f, 300, 672)
+                .padding(.horizontal, mapping.length(5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: mapping.length(1.5))
+                        .stroke(Color.white, lineWidth: mapping.length(1))
+                )
+                .centred(mapping, 300, 672)
             VStack(alignment: .trailing, spacing: 0) {
-                Text("CP650").font(.system(size: f.length(13), weight: .heavy).italic())
-                Text("Digital Cinema Processor").font(.system(size: f.length(10.5), weight: .semibold).italic())
+                Text("CP650").font(.system(size: mapping.length(13), weight: .heavy).italic())
+                Text("Digital Cinema Processor")
+                    .font(.system(size: mapping.length(10.5), weight: .semibold).italic())
             }
             .foregroundStyle(Color(white: 0.95))
-            .frame(width: f.length(220), alignment: .trailing)
-            .centred(f, 912, 672)
+            .frame(width: mapping.length(220), alignment: .trailing)
+            .centred(mapping, 912, 672)
             // Section dividers on the face.
-            Rectangle().fill(Color.black.opacity(0.6)).placed(f, 638, 688, 642, 920)
-            Rectangle().fill(Color.black.opacity(0.6)).placed(f, 800, 688, 805, 920)
+            Rectangle().fill(Color.black.opacity(0.6)).placed(mapping, 638, 688, 642, 920)
+            Rectangle().fill(Color.black.opacity(0.6)).placed(mapping, 800, 688, 805, 920)
         }
         .accessibilityHidden(true)
     }
@@ -189,14 +195,14 @@ private struct Louvre: View {
 }
 
 private struct SetupDoor: View {
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
-        RoundedRectangle(cornerRadius: f.length(4))
+        RoundedRectangle(cornerRadius: mapping.length(4))
             .fill(Color(white: 0.66))
             .overlay(
-                RoundedRectangle(cornerRadius: f.length(4))
-                    .stroke(Color(white: 0.35), lineWidth: f.length(1))
+                RoundedRectangle(cornerRadius: mapping.length(4))
+                    .stroke(Color(white: 0.35), lineWidth: mapping.length(1))
             )
             .accessibilityHidden(true)
     }
@@ -204,20 +210,20 @@ private struct SetupDoor: View {
 
 private struct SectionLabel: View {
     let text: String
-    let f: Figure
+    let mapping: Figure
     let lineFrom: CGFloat
     let lineTo: CGFloat
 
     var body: some View {
-        let width = f.length(max(lineTo - lineFrom, 40))
+        let width = mapping.length(max(lineTo - lineFrom, 40))
         ZStack {
             if lineTo > lineFrom {
-                Rectangle().fill(printColor).frame(width: width, height: f.length(0.8))
+                Rectangle().fill(printColor).frame(width: width, height: mapping.length(0.8))
             }
             Text(text)
-                .font(.system(size: f.length(9), weight: .semibold).italic())
+                .font(.system(size: mapping.length(9), weight: .semibold).italic())
                 .foregroundStyle(printColor)
-                .padding(.horizontal, f.length(4))
+                .padding(.horizontal, mapping.length(4))
                 .background(faceColor)
         }
         .frame(width: width)
@@ -229,15 +235,15 @@ private struct SectionLabel: View {
 
 private struct LCDView: View {
     @ObservedObject var model: RemoteModel
-    let f: Figure
+    let mapping: Figure
 
     private var formatLine: String { "Format \(model.currentFormat ?? "--")" }
     private var nameLine: String { model.currentFormat.flatMap { RemoteModel.formatNames[$0] } ?? "" }
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: f.length(5)).fill(Color(white: 0.42))
-            RoundedRectangle(cornerRadius: f.length(2))
+            RoundedRectangle(cornerRadius: mapping.length(5)).fill(Color(white: 0.42))
+            RoundedRectangle(cornerRadius: mapping.length(2))
                 .fill(
                     LinearGradient(
                         colors: [
@@ -246,17 +252,17 @@ private struct LCDView: View {
                         ],
                         startPoint: .top, endPoint: .bottom)
                 )
-                .frame(width: f.length(150), height: f.length(50))
+                .frame(width: mapping.length(150), height: mapping.length(50))
                 .overlay(
-                    VStack(alignment: .leading, spacing: f.length(1.5)) {
+                    VStack(alignment: .leading, spacing: mapping.length(1.5)) {
                         Text(formatLine)
                         Text(nameLine)
                     }
-                    .font(.system(size: f.length(10), weight: .medium, design: .monospaced))
+                    .font(.system(size: mapping.length(10), weight: .medium, design: .monospaced))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundStyle(Color(red: 0.08, green: 0.15, blue: 0.05))
-                    .padding(.horizontal, f.length(5))
+                    .padding(.horizontal, mapping.length(5))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 )
         }
@@ -268,20 +274,20 @@ private struct LCDView: View {
 
 private struct LevelDisplay: View {
     @ObservedObject var model: RemoteModel
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            RoundedRectangle(cornerRadius: f.length(3)).fill(Color(red: 0.07, green: 0, blue: 0))
+            RoundedRectangle(cornerRadius: mapping.length(3)).fill(Color(red: 0.07, green: 0, blue: 0))
             Group {
                 Text(model.levelInDecibels ? "-88.8" : "88.8")
                     .foregroundStyle(Color(red: 0.15, green: 0.01, blue: 0.01))
                 Text(model.levelText)
                     .foregroundStyle(Color(red: 1, green: 0.12, blue: 0.08))
-                    .shadow(color: .red, radius: f.length(3))
+                    .shadow(color: .red, radius: mapping.length(3))
             }
-            .font(.system(size: f.length(model.levelInDecibels ? 20 : 25), weight: .bold, design: .monospaced))
-            .padding(.trailing, f.length(6))
+            .font(.system(size: mapping.length(model.levelInDecibels ? 20 : 25), weight: .bold, design: .monospaced))
+            .padding(.trailing, mapping.length(6))
         }
         .contentShape(Rectangle())
         .onTapGesture { model.toggleLevelUnit() }
@@ -294,15 +300,15 @@ private struct LevelDisplay: View {
 }
 
 private struct ProjectorLamps: View {
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
-        HStack(spacing: f.length(12)) {
+        HStack(spacing: mapping.length(12)) {
             Text("P1")
             Image(systemName: "power")
             Text("P2")
         }
-        .font(.system(size: f.length(9), weight: .bold))
+        .font(.system(size: mapping.length(9), weight: .bold))
         .foregroundStyle(printColor)
         .accessibilityHidden(true)
     }
@@ -343,7 +349,7 @@ private struct PressScaleStyle: ButtonStyle {
 private struct FormatButton: View {
     @ObservedObject var model: RemoteModel
     let number: Int
-    let f: Figure
+    let mapping: Figure
 
     private var silkscreen: String { RemoteModel.buttonSilkscreen[number - 1] }
     private var selected: Bool { model.formatButton == number }
@@ -353,9 +359,9 @@ private struct FormatButton: View {
             model.pressButton(number)
         } label: {
             ZStack {
-                PanelButtonFace(diameter: f.length(34), glow: selected ? .white : nil)
+                PanelButtonFace(diameter: mapping.length(34), glow: selected ? .white : nil)
                 Text(silkscreen)
-                    .font(.system(size: f.length(10), weight: .heavy).italic())
+                    .font(.system(size: mapping.length(10), weight: .heavy).italic())
                     .foregroundStyle(Color(white: 0.1))
             }
             .contentShape(Circle())
@@ -370,7 +376,7 @@ private struct FormatButton: View {
 
 private struct MuteButton: View {
     @ObservedObject var model: RemoteModel
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         Button {
@@ -397,9 +403,9 @@ private struct MuteButton: View {
 
     private func face(lit: Bool) -> some View {
         ZStack {
-            PanelButtonFace(diameter: f.length(30), glow: lit ? .red : nil)
+            PanelButtonFace(diameter: mapping.length(30), glow: lit ? .red : nil)
             Image(systemName: "speaker.slash")
-                .font(.system(size: f.length(11), weight: .bold))
+                .font(.system(size: mapping.length(11), weight: .bold))
                 .foregroundStyle(lit ? Color.white : Color(white: 0.1))
         }
     }
@@ -409,15 +415,15 @@ private struct MuteButton: View {
 private struct DecorativeButton: View {
     var symbol: String?
     var text: String?
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         ZStack {
-            PanelButtonFace(diameter: f.length(30), glow: nil)
+            PanelButtonFace(diameter: mapping.length(30), glow: nil)
             if let symbol {
-                Image(systemName: symbol).font(.system(size: f.length(11), weight: .bold))
+                Image(systemName: symbol).font(.system(size: mapping.length(11), weight: .bold))
             } else if let text {
-                Text(text).font(.system(size: f.length(10), weight: .heavy).italic())
+                Text(text).font(.system(size: mapping.length(10), weight: .heavy).italic())
             }
         }
         .foregroundStyle(Color(white: 0.1))
@@ -426,15 +432,15 @@ private struct DecorativeButton: View {
 }
 
 private struct PowerButton: View {
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         Capsule()
             .fill(Color(white: 0.88))
-            .overlay(Capsule().stroke(Color.black, lineWidth: f.length(2)))
+            .overlay(Capsule().stroke(Color.black, lineWidth: mapping.length(2)))
             .overlay(
                 Image(systemName: "power")
-                    .font(.system(size: f.length(13), weight: .bold))
+                    .font(.system(size: mapping.length(13), weight: .bold))
                     .foregroundStyle(Color(white: 0.1))
             )
             .accessibilityHidden(true)
@@ -445,13 +451,13 @@ private struct PowerButton: View {
 
 /// The recess the knob sits in.
 private struct KnobCradle: View {
-    let f: Figure
+    let mapping: Figure
 
     var body: some View {
         Circle()
             .fill(Color(white: 0.62))
-            .overlay(Circle().stroke(Color(white: 0.3), lineWidth: f.length(1.5)))
-            .frame(width: f.length(150), height: f.length(150))
+            .overlay(Circle().stroke(Color(white: 0.3), lineWidth: mapping.length(1.5)))
+            .frame(width: mapping.length(150), height: mapping.length(150))
             .accessibilityHidden(true)
     }
 }
@@ -499,16 +505,16 @@ struct FaderKnob: View {
             DragGesture(minimumDistance: 0)
                 .onChanged { drag in
                     let centre = diameter * 0.6
-                    let dx = drag.location.x - centre
-                    let dy = drag.location.y - centre
+                    let offsetX = drag.location.x - centre
+                    let offsetY = drag.location.y - centre
                     // Near the centre the angle is meaningless: drop the anchor
                     // there and re-anchor past it, so crossing the centre
                     // never reads as half a turn.
-                    guard dx * dx + dy * dy > diameter * diameter * 0.01 else {
+                    guard offsetX * offsetX + offsetY * offsetY > diameter * diameter * 0.01 else {
                         tracker.angle = nil
                         return
                     }
-                    let pointer = atan2(dy, dx) * 180 / .pi
+                    let pointer = atan2(offsetY, offsetX) * 180 / .pi
                     if let last = tracker.angle {
                         var delta = pointer - last
                         if delta > 180 { delta -= 360 }

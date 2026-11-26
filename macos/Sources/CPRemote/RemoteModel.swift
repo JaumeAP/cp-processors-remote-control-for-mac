@@ -213,23 +213,23 @@ final class RemoteModel: ObservableObject {
         guard !address.isEmpty else { return "Type an IP address first." }
         let model = chosen ?? processorModel
         let name = Self.choiceName(model)
-        if let cp = processor, processorHost == address, cp.model == model {
-            guard let level = Self.faderLevel(await cp.get(model.panel.fader)) else {
+        if let link = processor, processorHost == address, link.model == model {
+            guard let level = Self.faderLevel(await link.get(model.panel.fader)) else {
                 return "Connected to \(address), but no fader reply."
             }
             return "OK: the connected \(name) at \(address) answered, fader \(Self.faderText(level))."
         }
-        let cp = ProcessorLink(host: address, port: port, model: model)
-        await pauseAfterClose(address, cp.port, model: model)
-        guard await cp.connect() else {
-            await cp.disconnect()
-            return "No connection to \(address) on port \(cp.port)."
+        let link = ProcessorLink(host: address, port: port, model: model)
+        await pauseAfterClose(address, link.port, model: model)
+        guard await link.connect() else {
+            await link.disconnect()
+            return "No connection to \(address) on port \(link.port)."
         }
-        let reply = await cp.get(model.panel.fader)
-        await cp.disconnect()
-        Self.closed(address, cp.port, model: model)
+        let reply = await link.get(model.panel.fader)
+        await link.disconnect()
+        Self.closed(address, link.port, model: model)
         guard let level = Self.faderLevel(reply) else {
-            return "Connected to \(address):\(cp.port), but no fader reply."
+            return "Connected to \(address):\(link.port), but no fader reply."
         }
         return "OK: the \(name) at \(address) answered, fader \(Self.faderText(level))."
     }
@@ -268,7 +268,7 @@ final class RemoteModel: ObservableObject {
     }
 
     /// One 0.1 step of the knob (arrow keys, VoiceOver, the Level menu).
-    func stepKnob(up: Bool) { turnKnob(byDegrees: (up ? 0.1 : -0.1) * Self.degreesPerUnit) }
+    func stepKnob(up upward: Bool) { turnKnob(byDegrees: (upward ? 0.1 : -0.1) * Self.degreesPerUnit) }
 
     /// The Dolby reference level, fader 7.0.
     static let referenceLevel = 7.0
@@ -279,7 +279,7 @@ final class RemoteModel: ObservableObject {
     /// A front-panel button: the CP650's format buttons (`format_button`), or
     /// the CP750's input buttons (`cp750.sys.input_mode`).
     func pressButton(_ button: Int) {
-        guard let cp = processor, isConnected else { return }
+        guard let link = processor, isConnected else { return }
         // A key the front does not have selects nothing: CP750 inputs 1 to 7,
         // CP650 formats 1 to 8.
         let keys = processorModel.panel.inputs?.count ?? RemoteModel.buttonSilkscreen.count
@@ -287,19 +287,19 @@ final class RemoteModel: ObservableObject {
         formatButton = button
         if let inputs = processorModel.panel.inputs {
             let value = inputs[button - 1]
-            send(Self.inputParam, on: cp) { await cp.set(Self.inputParam, value) }
+            send(Self.inputParam, on: link) { await link.set(Self.inputParam, value) }
         } else {
             // The panel counts the buttons 1 to 8; the CP650 counts them 0 to 7.
-            send(Self.formatButtonParam, on: cp) { await cp.set(Self.formatButtonParam, button - 1) }
+            send(Self.formatButtonParam, on: link) { await link.set(Self.formatButtonParam, button - 1) }
         }
     }
 
     func toggleMute() {
-        guard let cp = processor, isConnected else { return }
+        guard let link = processor, isConnected else { return }
         muted.toggle()
         let param = processorModel.panel.mute
         let value = muted ? 1 : 0
-        send(param, on: cp) { await cp.set(param, value) }
+        send(param, on: link) { await link.set(param, value) }
     }
 
     static func faderText(_ value: Double) -> String { String(format: "%.1f", value) }
@@ -330,7 +330,7 @@ final class RemoteModel: ObservableObject {
 
     /// Select a macro of the processor (CP850 / CP950 / CP950A).
     func selectMacro(_ number: Int) {
-        guard let cp = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
+        guard let link = processor, isConnected, let nameParam = processorModel.panel.macroName else { return }
         macroPreset = number
         // The new macro's name from the list; unknown, it is blank until the
         // poll reads it (the poll asks whenever the name shown is not the
@@ -338,7 +338,7 @@ final class RemoteModel: ObservableObject {
         macroName = macros?.first(where: { $0.number == number })?.name
         macroNameNumber = macroName == nil ? nil : number
         localChange[nameParam] = .now
-        send(Self.macroPresetParam, on: cp) { await cp.set(Self.macroPresetParam, number) }
+        send(Self.macroPresetParam, on: link) { await link.set(Self.macroPresetParam, number) }
     }
 
     /// The next (or previous) macro in the processor's list, wrapping round.
@@ -377,14 +377,14 @@ final class RemoteModel: ObservableObject {
     /// Send one control change, marking the control as changed here and as
     /// being sent until the send is through, so a poll reply from before it
     /// does not overwrite it.
-    private func send(_ param: String, on cp: ProcessorLink, _ operation: @escaping @Sendable () async -> Bool) {
+    private func send(_ param: String, on link: ProcessorLink, _ operation: @escaping @Sendable () async -> Bool) {
         localChange[param] = .now
         sending[param, default: 0] += 1
         Task {
-            let ok = await operation()
+            let delivered = await operation()
             sending[param, default: 1] -= 1
             if sending[param] == 0 { sending[param] = nil }
-            if !ok, processor === cp { note("\(param) not sent: \(await cp.lastError)") }
+            if !delivered, processor === link { note("\(param) not sent: \(await link.lastError)") }
         }
     }
 
@@ -395,13 +395,13 @@ final class RemoteModel: ObservableObject {
             pendingFader = nil  // the panel is unread: never send a level from before
             return
         }
-        guard !faderInFlight, let value = pendingFader, let cp = processor else { return }
+        guard !faderInFlight, let value = pendingFader, let link = processor else { return }
         pendingFader = nil
         faderInFlight = true
         let param = processorModel.panel.fader
         Task {
-            if !(await cp.set(param, value)), processor === cp {
-                note("\(param) not sent: \(await cp.lastError)")
+            if !(await link.set(param, value)), processor === link {
+                note("\(param) not sent: \(await link.lastError)")
             }
             faderInFlight = false
             pumpFader()
@@ -453,9 +453,9 @@ final class RemoteModel: ObservableObject {
             showSetup = true
             return
         }
-        let cp = ProcessorLink(host: address, port: port, model: processorModel)
-        note("connect to \(address):\(cp.port) as \(processorModel.rawValue)")
-        processor = cp
+        let link = ProcessorLink(host: address, port: port, model: processorModel)
+        note("connect to \(address):\(link.port) as \(processorModel.rawValue)")
+        processor = link
         processorHost = address
         linkOpened = false
         localChange = [:]
@@ -475,25 +475,25 @@ final class RemoteModel: ObservableObject {
         announceConnectionChange()
         // A CP650 session this app closed a moment ago (the main link, a
         // Test link) may still hold the unit's one connection.
-        await pauseAfterClose(address, cp.port, model: processorModel)
-        guard processor === cp else { return }
-        linkOpened = await cp.connect()
-        guard processor === cp else { return }
-        if !linkOpened { note("no answer from \(address) at connect (\(await cp.lastError)): the poll retries") }
-        startPolling(cp)
+        await pauseAfterClose(address, link.port, model: processorModel)
+        guard processor === link else { return }
+        linkOpened = await link.connect()
+        guard processor === link else { return }
+        if !linkOpened { note("no answer from \(address) at connect (\(await link.lastError)): the poll retries") }
+        startPolling(link)
     }
 
     private func reconnectNow() async {
-        guard let cp = processor, processorHost == trimmedHost, cp.model == processorModel else {
+        guard let link = processor, processorHost == trimmedHost, link.model == processorModel else {
             return await connectNow()
         }
         note("reconnect requested")
         markUnread("reconnect requested")
         formatListDue = true
         resetMacroReads()
-        linkOpened = await cp.reconnect()
-        guard processor === cp else { return }
-        if !linkOpened { note("reconnect failed: \(await cp.lastError)") }
+        linkOpened = await link.reconnect()
+        guard processor === link else { return }
+        if !linkOpened { note("reconnect failed: \(await link.lastError)") }
     }
 
     private func disconnectNow() async {
@@ -501,7 +501,7 @@ final class RemoteModel: ObservableObject {
         pollTask = nil
         pendingFader = nil
         endKnobTurn()
-        guard let cp = processor else { return }
+        guard let link = processor else { return }
         note("disconnect requested")
         let closedHost = processorHost
         processor = nil
@@ -513,8 +513,8 @@ final class RemoteModel: ObservableObject {
         macros = nil
         panelRead = false
         announceConnectionChange()
-        await cp.disconnect()
-        if let closedHost { Self.closed(closedHost, cp.port, model: cp.model) }
+        await link.disconnect()
+        if let closedHost { Self.closed(closedHost, link.port, model: link.model) }
     }
 
     /// Disable the controls until the panel has been read again on the
@@ -540,35 +540,35 @@ final class RemoteModel: ObservableObject {
 
     // MARK: - Polling
 
-    private func startPolling(_ cp: ProcessorLink) {
+    private func startPolling(_ link: ProcessorLink) {
         pollTask = Task { [weak self] in
             // Read at once, then every two seconds; connect() does not wait
             // for it, so a link that never answers still shows its state.
             while !Task.isCancelled {
                 guard let self else { return }
-                await self.pollCycle(cp)
+                await self.pollCycle(link)
                 await Monotonic.sleep(for: Self.pollInterval)
             }
         }
     }
 
-    private func isCurrent(_ cp: ProcessorLink) -> Bool { processor === cp && !Task.isCancelled }
+    private func isCurrent(_ link: ProcessorLink) -> Bool { processor === link && !Task.isCancelled }
 
-    private func pollCycle(_ cp: ProcessorLink) async {
-        guard isCurrent(cp) else { return }
+    private func pollCycle(_ link: ProcessorLink) async {
+        guard isCurrent(link) else { return }
         if !linkOpened {
             // A processor that was off, booting or unreachable at connect
             // time is found when it comes up. Once opened, the library
             // re-opens a dropped link itself inside the next read.
-            let ok = await cp.connect()
-            guard isCurrent(cp) else { return }
-            note("connect \(ok ? "succeeded" : "failed")")
-            guard ok else { return }
+            let connected = await link.connect()
+            guard isCurrent(link) else { return }
+            note("connect \(connected ? "succeeded" : "failed")")
+            guard connected else { return }
             linkOpened = true
             formatListDue = true
             resetMacroReads()
         }
-        await refresh(cp)
+        await refresh(link)
     }
 
     /// A new or reopened link: the macro number and name are read again,
@@ -596,16 +596,16 @@ final class RemoteModel: ObservableObject {
         return true
     }
 
-    private func refresh(_ cp: ProcessorLink) async {
+    private func refresh(_ link: ProcessorLink) async {
         let panel = processorModel.panel
         var start = Monotonic.Instant.now
-        let faderReply = await cp.get(panel.fader)
-        guard isCurrent(cp) else { return }
+        let faderReply = await link.get(panel.fader)
+        guard isCurrent(link) else { return }
         guard let faderReply else {
             // Unanswered: after a few in a row, reopen a link that is open
             // but hung, and skip the other reads (each would time out too).
             silentPolls += 1
-            note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit)): \(await cp.lastError)")
+            note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit)): \(await link.lastError)")
             markUnread("fader read unanswered")
             if silentPolls >= Self.silentPollLimit {
                 note("reopening the link: \(Self.silentPollLimit) fader reads unanswered")
@@ -613,7 +613,7 @@ final class RemoteModel: ObservableObject {
                 formatListDue = true
                 resetMacroReads()
                 linkReopens += 1
-                _ = await cp.reconnect()
+                _ = await link.reconnect()
             }
             return
         }
@@ -628,14 +628,14 @@ final class RemoteModel: ObservableObject {
         // The selected button: the CP650's format button, or the CP750's input.
         start = .now
         if processorModel == .cp650 {
-            if let reply = await cp.get(Self.formatButtonParam), isCurrent(cp),
+            if let reply = await link.get(Self.formatButtonParam), isCurrent(link),
                 let wireValue = Int(reply), (0...7).contains(wireValue),
                 mayApply(Self.formatButtonParam, readStartedAt: start),
                 formatButton != wireValue + 1
             {
                 formatButton = wireValue + 1
             }
-        } else if let inputs = panel.inputs, let reply = await cp.get(Self.inputParam), isCurrent(cp),
+        } else if let inputs = panel.inputs, let reply = await link.get(Self.inputParam), isCurrent(link),
             let index = inputs.firstIndex(of: reply),
             mayApply(Self.inputParam, readStartedAt: start),
             formatButton != index + 1
@@ -644,8 +644,8 @@ final class RemoteModel: ObservableObject {
         }
 
         start = .now
-        let muteReply = await cp.get(panel.mute)
-        guard isCurrent(cp) else { return }
+        let muteReply = await link.get(panel.mute)
+        guard isCurrent(link) else { return }
         if let muteReply, mayApply(panel.mute, readStartedAt: start), muted != (muteReply == "1") {
             muted = muteReply == "1"
         }
@@ -664,8 +664,8 @@ final class RemoteModel: ObservableObject {
         if panel.macroName != nil, macroPollsToSkip > 0 { macroPollsToSkip -= 1 }
         if let nameParam = panel.macroName, macroPollsToSkip == 0 {
             start = .now
-            let presetReply = await cp.get(Self.macroPresetParam)
-            guard isCurrent(cp) else { return }
+            let presetReply = await link.get(Self.macroPresetParam)
+            guard isCurrent(link) else { return }
             if let presetReply {
                 macroMisses = 0
                 if let number = Int(presetReply.trimmingCharacters(in: .whitespaces)),
@@ -677,8 +677,8 @@ final class RemoteModel: ObservableObject {
                         // The number and its name change together: a new key
                         // is never shown beside the old macro's name.
                         start = .now
-                        let nameReply = await cp.get(nameParam)
-                        guard isCurrent(cp) else { return }
+                        let nameReply = await link.get(nameParam)
+                        guard isCurrent(link) else { return }
                         if let nameReply {
                             if mayApply(nameParam, readStartedAt: start),
                                 mayApply(Self.macroPresetParam, readStartedAt: start)
@@ -703,9 +703,9 @@ final class RemoteModel: ObservableObject {
         // The CP650's programmed formats change only in setup: one attempt
         // per opened link, so a processor that never answers it is not asked
         // again.
-        guard processorModel == .cp650, formatListDue, isCurrent(cp) else { return }
+        guard processorModel == .cp650, formatListDue, isCurrent(link) else { return }
         formatListDue = false
-        if let reply = await cp.get("format_list"), isCurrent(cp) {
+        if let reply = await link.get("format_list"), isCurrent(link) {
             let labels = reply.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
             if labels.count == 8, labels.allSatisfy({ !$0.isEmpty }) { programmedFormats = labels }
         }

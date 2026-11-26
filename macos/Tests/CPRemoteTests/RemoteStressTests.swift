@@ -80,15 +80,16 @@ private let removeSharedSuitesAtExit: Void = {
         // Pixels differing by more than a few levels, sampled every 3 pixels.
         var differing = 0
         var sampled = 0
-        for y in stride(from: 0, to: first.pixelsHigh, by: 3) {
-            for x in stride(from: 0, to: first.pixelsWide, by: 3) {
-                guard let a = first.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
-                    let b = second.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+        for row in stride(from: 0, to: first.pixelsHigh, by: 3) {
+            for column in stride(from: 0, to: first.pixelsWide, by: 3) {
+                guard let firstColor = first.colorAt(x: column, y: row)?.usingColorSpace(.deviceRGB),
+                    let secondColor = second.colorAt(x: column, y: row)?.usingColorSpace(.deviceRGB)
                 else { continue }
                 sampled += 1
                 let delta =
-                    abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
-                    + abs(a.blueComponent - b.blueComponent)
+                    abs(firstColor.redComponent - secondColor.redComponent)
+                    + abs(firstColor.greenComponent - secondColor.greenComponent)
+                    + abs(firstColor.blueComponent - secondColor.blueComponent)
                 if delta > 0.05 { differing += 1 }
             }
         }
