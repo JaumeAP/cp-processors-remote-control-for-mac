@@ -13,10 +13,6 @@ from this folder when the package moved to v2.1.0.
 | Asset | SHA-256 (checked against the release notes) |
 | --- | --- |
 | `libcpx50comms.dylib` (CPX50COMMS_OMVLL + OBFUSCATE + SHARED) | `c04b1af8945572c449f7ed858de268d65411d2225398a83b56cde35a74432521` |
-| `processor_sim-obf` (arm64 + x86_64, obfuscated, stripped) | `94e644065719d4d5a41d2eb74573dbfd13246bcbc61e07e41863a69d90aa67da` |
-
-`processor_sim-obf` is not in this folder: the vendored simulator under
-`cpseries-simulator/` is still the v1.1.0 source and has not been migrated.
 
 ## Layout
 
