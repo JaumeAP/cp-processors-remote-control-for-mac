@@ -5,6 +5,7 @@ import AppKit
 import Foundation
 import SwiftUI
 import Testing
+
 @testable import CPRemote
 
 // MARK: - Helpers
@@ -62,7 +63,8 @@ private let removeSharedSuitesAtExit: Void = {
         let width: CGFloat = 900
         let size = CGSize(width: width, height: width / processor.aspect)
         func render() throws -> NSBitmapImageRep {
-            let renderer = ImageRenderer(content: FrontPanelView(model: model).frame(width: size.width, height: size.height))
+            let renderer = ImageRenderer(
+                content: FrontPanelView(model: model).frame(width: size.width, height: size.height))
             renderer.scale = 1
             return NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
         }
@@ -76,19 +78,24 @@ private let removeSharedSuitesAtExit: Void = {
         #expect(png.count > 20_000, "a blank panel would be almost empty")
         #expect(first.pixelsWide == second.pixelsWide && first.pixelsHigh == second.pixelsHigh)
         // Pixels differing by more than a few levels, sampled every 3 pixels.
-        var differing = 0, sampled = 0
-        for y in stride(from: 0, to: first.pixelsHigh, by: 3) {
-            for x in stride(from: 0, to: first.pixelsWide, by: 3) {
-                guard let a = first.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
-                      let b = second.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { continue }
+        var differing = 0
+        var sampled = 0
+        for row in stride(from: 0, to: first.pixelsHigh, by: 3) {
+            for column in stride(from: 0, to: first.pixelsWide, by: 3) {
+                guard let firstColor = first.colorAt(x: column, y: row)?.usingColorSpace(.deviceRGB),
+                    let secondColor = second.colorAt(x: column, y: row)?.usingColorSpace(.deviceRGB)
+                else { continue }
                 sampled += 1
-                let delta = abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent)
-                    + abs(a.blueComponent - b.blueComponent)
+                let delta =
+                    abs(firstColor.redComponent - secondColor.redComponent)
+                    + abs(firstColor.greenComponent - secondColor.greenComponent)
+                    + abs(firstColor.blueComponent - secondColor.blueComponent)
                 if delta > 0.05 { differing += 1 }
             }
         }
-        #expect(Double(differing) <= Double(sampled) * 0.001,
-                "the same state must draw the same picture (\(differing) of \(sampled) pixels differ)")
+        #expect(
+            Double(differing) <= Double(sampled) * 0.001,
+            "the same state must draw the same picture (\(differing) of \(sampled) pixels differ)")
     }
 }
 
@@ -113,7 +120,8 @@ private let removeSharedSuitesAtExit: Void = {
         #expect(lines.count == 2)
         #expect(lines[0].hasSuffix(" first") && lines[1].hasSuffix(" second"))
         // 2026-11-10T11:22:25.123Z: the time, to the millisecond, in UTC.
-        #expect(lines[0].range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z "#, options: .regularExpression) != nil)
+        #expect(
+            lines[0].range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z "#, options: .regularExpression) != nil)
     }
 
     @Test func theFileRotatesAndNeverGrowsWithoutLimit() throws {
@@ -123,7 +131,8 @@ private let removeSharedSuitesAtExit: Void = {
         for number in 0..<400 { log.write("line number \(number) with some padding to fill the file") }
         log.flush()
         let sizes = ["connection.log", "connection.log.1"].map {
-            (try? FileManager.default.attributesOfItem(atPath: folder.appendingPathComponent($0).path))?[.size] as? Int ?? 0
+            (try? FileManager.default.attributesOfItem(atPath: folder.appendingPathComponent($0).path))?[.size] as? Int
+                ?? 0
         }
         #expect(sizes[1] > 0, "the older file exists")
         #expect(sizes[0] <= 2_000 + 200 && sizes[1] <= 2_000 + 200, "each file stays near the limit")

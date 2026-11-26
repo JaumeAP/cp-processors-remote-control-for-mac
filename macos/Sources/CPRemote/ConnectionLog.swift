@@ -25,7 +25,9 @@ final class ConnectionLog: @unchecked Sendable {
     /// `connection.log.1` (replacing the older one) and a new file starts, so
     /// the log never takes more than twice that.
     init(directory: URL? = nil, maximumBytes: Int = 1_000_000) {
-        let folder = directory ?? FileManager.default
+        let folder =
+            directory
+            ?? FileManager.default
             .urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/CP Remote", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -47,7 +49,8 @@ final class ConnectionLog: @unchecked Sendable {
     private func append(_ line: String) {
         let fileManager = FileManager.default
         if let size = (try? fileManager.attributesOfItem(atPath: url.path))?[.size] as? Int,
-           size > maximumBytes {
+            size > maximumBytes
+        {
             let older = url.appendingPathExtension("1")
             try? fileManager.removeItem(at: older)
             try? fileManager.moveItem(at: url, to: older)

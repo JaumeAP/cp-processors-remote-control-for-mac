@@ -21,16 +21,20 @@ struct CPRemoteApp: App {
     private static func logAppAndWindowEvents() {
         let log = ConnectionLog.shared
         let info = ProcessInfo.processInfo
-        log.write("start: CP Remote \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unversioned"), "
-                  + "macOS \(info.operatingSystemVersionString)")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unversioned"
+        log.write(
+            "start: CP Remote \(version), "
+                + "macOS \(info.operatingSystemVersionString)")
         let names: [Notification.Name] = [
             NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
             NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
             NSWindow.didChangeOcclusionStateNotification, NSWindow.willMoveNotification,
         ]
         // At quit, the lines still queued would be lost: write them first.
-        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
-                                               object: nil, queue: .main) { _ in
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil, queue: .main
+        ) { _ in
             log.write("quit")
             log.flush()
         }
@@ -46,7 +50,11 @@ struct CPRemoteApp: App {
         }
     }
 
-    private static let moveToApplicationsMessage = "CP Remote is running from the disk image or from the folder it was downloaded to. a copy run from the disk image is gone once the image is ejected, and macOS may treat the app as a new one and ask again for its permissions. Quit it, drag CP Remote to the Applications folder and open it from there."
+    private static let moveToApplicationsMessage =
+        "CP Remote is running from the disk image or from the folder it was downloaded to. "
+        + "a copy run from the disk image is gone once the image is ejected, and macOS may treat "
+        + "the app as a new one and ask again for its permissions. Quit it, drag CP Remote to the "
+        + "Applications folder and open it from there."
 
     var body: some Scene {
         WindowGroup("CP Remote", id: "main") {
@@ -59,7 +67,7 @@ struct CPRemoteApp: App {
                 }
                 .task {
                     NSApplication.shared.activate(ignoringOtherApps: true)
-                    await model.connect()   // with no address saved, opens Setup
+                    await model.connect()  // with no address saved, opens Setup
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -75,18 +83,25 @@ struct CPRemoteApp: App {
                     .keyboardShortcut("0")
                     .disabled(!model.isConnected)
                 Divider()
-                Toggle("Show Level in dB", isOn: Binding(get: { model.levelInDecibels },
-                                                         set: { _ in model.toggleLevelUnit() }))
-                    .keyboardShortcut("d")
+                Toggle(
+                    "Show Level in dB",
+                    isOn: Binding(
+                        get: { model.levelInDecibels },
+                        set: { _ in model.toggleLevelUnit() })
+                )
+                .keyboardShortcut("d")
             }
             CommandMenu("Macro") {
                 if let macros = model.macros {
                     ForEach(Array(macros.prefix(9).enumerated()), id: \.element.number) { index, macro in
-                        Toggle("\(macro.number): \(macro.name)",
-                               isOn: Binding(get: { model.macroPreset == macro.number },
-                                             set: { _ in model.selectMacro(macro.number) }))
-                            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
-                            .disabled(!model.isConnected)
+                        Toggle(
+                            "\(macro.number): \(macro.name)",
+                            isOn: Binding(
+                                get: { model.macroPreset == macro.number },
+                                set: { _ in model.selectMacro(macro.number) })
+                        )
+                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
+                        .disabled(!model.isConnected)
                     }
                     Divider()
                     Button("Next Macro") { model.stepMacro(by: 1) }

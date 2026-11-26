@@ -1,0 +1,6 @@
+disabled_rules:
+  # swift-format (Apple's formatter, see .swift-format) adds trailing commas
+  # to multi-line collections and puts the brace of a wrapped condition on its
+  # own line; these two rules would undo that.
+  - trailing_comma
+  - opening_brace
