@@ -13,8 +13,11 @@
 # Open Anyway). The release workflow (.github/workflows/macos.yml) runs this script on a Mac runner.
 set -euo pipefail
 
-VERSION="1.1.0"
-BUNDLE_VERSION="20"
+VERSION="1.1.1"
+BUNDLE_VERSION="21"
+# The architectures to build: "arm64 x86_64" for a universal app (the default),
+# "arm64" or "x86_64" for a single one.
+ARCHS="${ARCHS:-arm64 x86_64}"
 APP_NAME="CPRemote"
 
 here="$(cd "$(dirname "$0")/.." && pwd)"   # the macos/ folder
@@ -26,11 +29,13 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 # A universal binary: Apple silicon and Intel Macs on macOS 14 or later.
-(cd "$here" && swift build -c release --arch arm64 --arch x86_64)
+arch_flags=()
+for arch in $ARCHS; do arch_flags+=(--arch "$arch"); done
+(cd "$here" && swift build -c release "${arch_flags[@]}")
 # Where a multi-arch build lands depends on the SwiftPM version: ask it.
-binary="$(cd "$here" && swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/$APP_NAME"
+binary="$(cd "$here" && swift build -c release "${arch_flags[@]}" --show-bin-path)/$APP_NAME"
 [ -x "$binary" ] || { echo "no release binary at $binary" >&2; exit 1; }
-for arch in arm64 x86_64; do
+for arch in $ARCHS; do
     lipo "$binary" -verify_arch "$arch" || { echo "the binary lacks $arch" >&2; exit 1; }
 done
 

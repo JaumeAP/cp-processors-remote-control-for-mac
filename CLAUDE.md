@@ -8,6 +8,16 @@ minimum: `macos/Package.swift` and `cpseries-release/Package.swift`
 availability check. The toolchain here (Swift 6.4.2) compiles no lower than
 macOS 12, so macOS 11 is not a target.
 
+## Release builds: universal binary
+
+A published app is a universal binary (arm64 and x86_64).
+`macos/scripts/make-dmg.sh` builds both by default (`ARCHS="arm64 x86_64"`);
+`check-dmg.sh` checks the image. Build it locally and publish the image
+yourself: no CI builds releases. The vendored cpx50comms library in
+`cpseries-release/` must then include an x86_64 slice. Until it does, the
+universal build fails at link time, and a single-architecture build
+(`ARCHS=arm64`) is not a release.
+
 ## Building and testing: local only
 
 Verify every change on this Mac, never in CI. Before any build or test, run

@@ -1,5 +1,9 @@
 # CP Remote release notes
 
+## 1.1.1
+- CP Remote now runs from macOS 12.0 (Monterey) onward. Version 1.1.0 needed a newer macOS.
+- The processor link uses the cpx50comms library of CPSeries v2.1.0, the release the app is built against.
+
 ## 1.1.0 (2026-11-22)
 - CP Remote now talks to the processor through the cpseries control library (CPSeries 1.1.0), which replaces its own connection code. The fader, mute, the CP650's format buttons and programmed formats, the CP750's inputs and the CP850 / CP950 macro number and name are read and sent as before. It has been checked against a processor simulator, not yet on a real processor.
 - Not in this version, compared with 1.0.18: serial lines (USB adapters), the CP850 / CP950 macro list with its names, the window that helps allow CP Remote on the local network, and the lines exchanged with the processor in the connection log. Keep 1.0.18 for any of these.
