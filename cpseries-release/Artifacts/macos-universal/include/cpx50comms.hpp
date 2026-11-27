@@ -167,6 +167,9 @@ public:
 
     CPX50COMMS_API Status status() const;
     CPX50COMMS_API const std::unordered_map<std::string, std::string>& state() const;
+    // [H] The format button lamp mask from the processor's own lines (replies and pushes), never
+    // from this client's SETs or buttons; 0 until one is seen. See cpx50comms.cpp.
+    CPX50COMMS_API long long lamp_mask() const;
     CPX50COMMS_API std::size_t queued() const;
     CPX50COMMS_API Model model() const;
     // Why the last get() returned nothing, one entry per attempt (the line
