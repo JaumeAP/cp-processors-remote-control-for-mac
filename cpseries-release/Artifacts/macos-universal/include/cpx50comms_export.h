@@ -3,9 +3,10 @@
  * is written once. A C-compatible header: no C++ constructs.
  *
  * Only the symbols marked CPX50COMMS_API / CPX50COMMS_C_API are exported:
- *   - the obfuscation build (cmake -DCPX50COMMS_OBFUSCATE=ON, -fvisibility=hidden):
+ *   - the obfuscation build (CPX50COMMS_OBFUSCATE defined, -fvisibility=hidden):
  *     visibility("default"), the internals left hidden.
- *   - otherwise empty. See cpp/README.md, "Hiding the client".
+ *   - otherwise empty. The Apple build (cpp/README.md, "Apple build") defines
+ *     neither, so its exports are the C++ and C API as declared.
  *
  * CPX50COMMS_C_ONLY makes the C API the library's only export. It turns off the
  * C++ marks (CPX50COMMS_API is empty) and leaves the C marks to the rules above.

@@ -4,7 +4,7 @@
 - The app bundle now carries the cpx50comms library, so it starts outside the build tree.
 - The Macro menu is gone: it only ever said "No macros on this processor", because the macro list is not read. The CP850's macro keys and the CP950's macro name are unchanged.
 - CP Remote now runs from macOS 12.0 (Monterey) onward. Version 1.1.0 needed a newer macOS.
-- The processor link uses the cpx50comms library of CPSeries v2.1.0, the release the app is built against.
+- The processor link uses the cpx50comms library of CPSeries v3.0.0, the release the app is built against.
 
 ## 1.1.0 (2026-11-22)
 - CP Remote now talks to the processor through the cpseries control library (CPSeries 1.1.0), which replaces its own connection code. The fader, mute, the CP650's format buttons and programmed formats, the CP750's inputs and the CP850 / CP950 macro number and name are read and sent as before. It has been checked against a processor simulator, not yet on a real processor.

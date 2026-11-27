@@ -33,16 +33,37 @@ the processors over TCP/IP through the vendored cpseries library
 
 ## cpseries-release: the vendored client library
 
-`cpseries-release/` is a SwiftPM package holding CPSeries' release `v2.2.0`
-binaries, unchanged: the macOS build (linked by SwiftPM through
-`CPSeries.xcframework`, product `CPSeries`, plain-C API). Never edit those files
-here; `cpseries-release/RELEASE.md` lists their origin, hashes and how to
-refresh them. Test it with
-`swift test --scratch-path <scratchpad>/cpseries-release-build` in
+`cpseries-release/` is a SwiftPM package holding CPSeries' release binaries,
+unchanged: the macOS build (linked by SwiftPM through `CPSeries.xcframework`,
+product `CPSeries`, plain-C API). Never edit those files here;
+`cpseries-release/RELEASE.md` lists their origin, tag, commit and hashes.
+Test it with `swift test --scratch-path <scratchpad>/cpseries-release-build` in
 `cpseries-release/`.
 
 This repository holds no CPSeries source code. The app works without access to
 the CPSeries repository.
+
+Before any build or test, check the vendored pointer. Use the GitHub connector,
+not the release notes:
+
+1. Check access: `mcp__github__get_latest_release` on `JaumeAP/CPSeries`. If it
+   fails, the repository is unreachable: skip to step 6 and use the vendored copy.
+2. Compare the latest release tag with the tag in `cpseries-release/RELEASE.md`.
+   If they match, the pointer is current: skip to step 6.
+3. If they differ, update the pointer: download the new release's assets with
+   `gh release download <tag> -R JaumeAP/CPSeries` into the session scratchpad,
+   and verify them against its `SHA256SUMS`.
+4. Vendor the new library: copy `libcpx50comms.dylib` into
+   `Artifacts/macos-universal/` and `CPSeries.xcframework/macos-arm64_x86_64/`;
+   copy the headers from the tag's `cpp/client/` (`cpx50comms.hpp`,
+   `cpx50comms_c.h`, `cpx50comms_export.h`) into `Artifacts/macos-universal/include/`,
+   and the two C headers into the xcframework's `Headers/`. Check the library's
+   architectures (`lipo -archs`) and `minos 12.0`.
+5. Update `cpseries-release/RELEASE.md` (tag, commit, hashes). Then build and test.
+6. Build and test `cpseries-release/` with the vendored copy.
+
+Access to the repository is for the pointer only: it is never a source for the
+build itself.
 
 ## Audits: what to run, and where
 
