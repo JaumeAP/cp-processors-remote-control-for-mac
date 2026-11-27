@@ -41,7 +41,7 @@ extension RemoteModel {
             }
             return "OK: the connected \(name) at \(address) answered, fader \(Self.faderText(level))."
         }
-        let link = ProcessorLink(host: address, port: port, model: model)
+        let link = makeLink(address, port, model)
         await pauseAfterClose(address, link.port, model: model)
         guard await link.connect() else {
             await link.disconnect()
@@ -86,7 +86,7 @@ extension RemoteModel {
             showSetup = true
             return
         }
-        let link = ProcessorLink(host: address, port: port, model: processorModel)
+        let link = makeLink(address, port, processorModel)
         note("connect to \(address):\(link.port) as \(processorModel.rawValue)")
         processor = link
         processorHost = address
@@ -119,7 +119,7 @@ extension RemoteModel {
     /// its old session is closed, recorded and given the reopen pause before
     /// the new one opens. Other models keep the library's own reconnect, which
     /// keeps the queued sends.
-    func reopenLink(_ link: ProcessorLink) async -> Bool {
+    func reopenLink(_ link: any ControlLink) async -> Bool {
         guard link.model == .cp650 else { return await link.reconnect() }
         await link.disconnect()
         Self.closed(link.host, link.port, model: link.model)
@@ -190,7 +190,7 @@ extension RemoteModel {
     /// Send one control change, marking the control as changed here and as
     /// being sent until the send is through, so a poll reply from before it
     /// does not overwrite it.
-    func send(_ param: String, on link: ProcessorLink, _ operation: @escaping @Sendable () async -> Bool) {
+    func send(_ param: String, on link: any ControlLink, _ operation: @escaping @Sendable () async -> Bool) {
         localChange[param] = .now
         sending[param, default: 0] += 1
         Task {

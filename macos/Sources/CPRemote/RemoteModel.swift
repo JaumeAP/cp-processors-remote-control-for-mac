@@ -60,8 +60,6 @@ final class RemoteModel: ObservableObject {
     /// Unanswered fader reads in a row after which the link is closed and
     /// opened again (a hung control session).
     static let silentPollLimit = 2
-    /// Seconds between two reads of the panel.
-    static let pollInterval: TimeInterval = 2
     static let hostKey = "processorHost"
     static let modelKey = "processorModel"
     static let decibelsKey = "levelInDecibels"
@@ -131,7 +129,7 @@ final class RemoteModel: ObservableObject {
     var knobValue: Double?
     var isTurningKnob: Bool { knobValue != nil }
 
-    var processor: ProcessorLink?
+    var processor: (any ControlLink)?
     /// The address `processor` was built for.
     var processorHost: String?
     /// The link has been opened once; until then each poll tries to open it.
@@ -162,14 +160,25 @@ final class RemoteModel: ObservableObject {
     /// The CP650's reopen pause, `cp650ReopenPause` unless a test sets it.
     let reopenPause: Double
 
+    /// Seconds between two reads of the panel (2 unless a test sets it).
+    let pollInterval: TimeInterval
+
+    /// Makes the link to a processor: the real `ProcessorLink`, or a test's fake.
+    let makeLink: @MainActor (_ host: String, _ port: UInt16?, _ model: ProcessorModel) -> any ControlLink
+
     init(
         defaults: UserDefaults = .standard, port: UInt16? = nil, log: ConnectionLog? = .shared,
-        reopenPause: Double = RemoteModel.cp650ReopenPause
+        reopenPause: Double = RemoteModel.cp650ReopenPause, pollInterval: TimeInterval = 2,
+        makeLink: @escaping @MainActor (_ host: String, _ port: UInt16?, _ model: ProcessorModel) -> any ControlLink = {
+            ProcessorLink(host: $0, port: $1, model: $2)
+        }
     ) {
         self.defaults = defaults
         self.port = port
         self.log = log
         self.reopenPause = reopenPause
+        self.pollInterval = pollInterval
+        self.makeLink = makeLink
         host = defaults.string(forKey: Self.hostKey) ?? ""
         levelInDecibels = defaults.bool(forKey: Self.decibelsKey)
         // A saved CP950A is the CP950 choice (one front, one protocol), so

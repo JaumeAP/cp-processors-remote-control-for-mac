@@ -15,7 +15,7 @@ import Foundation
 
 #if canImport(CPSeriesC)
 
-    final class ProcessorLink: @unchecked Sendable {
+    final class ProcessorLink: ControlLink, @unchecked Sendable {
         let host: String
         let port: UInt16
         let model: ProcessorModel
@@ -68,7 +68,7 @@ import Foundation
 
         /// Ask for `param` and wait for its value; nil when there is none (a
         /// timeout, `error`, a lost link). `timeout` 0: the library's own.
-        func get(_ param: String, timeout: Double = 0) async -> String? {
+        func get(_ param: String, timeout: Double) async -> String? {
             await perform(nil) { handle in
                 var size = 256
                 while true {
@@ -115,7 +115,7 @@ import Foundation
 #else
 
     /// Stub used when the cpx50comms library is not available to the build.
-    final class ProcessorLink: @unchecked Sendable {
+    final class ProcessorLink: ControlLink, @unchecked Sendable {
         let host: String
         let port: UInt16
         let model: ProcessorModel
@@ -129,7 +129,7 @@ import Foundation
         func connect() async -> Bool { false }
         func reconnect() async -> Bool { false }
         func disconnect() async {}
-        func get(_ param: String, timeout: Double = 0) async -> String? { nil }
+        func get(_ param: String, timeout: Double) async -> String? { nil }
         func set(_ param: String, _ value: Int) async -> Bool { false }
         func set(_ param: String, _ value: String) async -> Bool { false }
         var lastError: String { get async { "cpx50comms library not available" } }

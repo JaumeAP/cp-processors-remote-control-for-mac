@@ -13,8 +13,8 @@
 # Open Anyway). Releases are built locally on a Mac, never in CI (see CLAUDE.md).
 set -euo pipefail
 
-VERSION="1.1.1"
-BUNDLE_VERSION="21"
+VERSION="3.0.0"
+BUNDLE_VERSION="22"
 # The architectures to build: "arm64 x86_64" for a universal app (the default),
 # "arm64" or "x86_64" for a single one.
 ARCHS="${ARCHS:-arm64 x86_64}"

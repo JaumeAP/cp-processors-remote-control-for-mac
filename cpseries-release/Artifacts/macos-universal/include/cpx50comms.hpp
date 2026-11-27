@@ -134,6 +134,10 @@ class Client {
 public:
     static constexpr std::size_t QMAX = 10;
     static constexpr int RESYNC_MAX = 32;
+    // A list reply ends once the link is quiet this long after the last item;
+    // at most LIST_MAX items are kept (cpx50.comms.client LIST_QUIET/LIST_MAX).
+    static constexpr double LIST_QUIET = 0.3;
+    static constexpr std::size_t LIST_MAX = 256;
 
     CPX50COMMS_API Client(std::string host, int port, Model model, Options options = {});
     CPX50COMMS_API ~Client();
@@ -152,9 +156,20 @@ public:
     CPX50COMMS_API void run();
     // Query `param`; its value, or nothing on timeout, `error` or a lost link.
     CPX50COMMS_API std::optional<std::string> get(std::string_view param, double timeout = timers::QUERY_TIMEOUT);
+    // Query a list param (`sys.macros`): a header line naming it, then one
+    // `N:name` item per line [M1 CP850 Iss2 Table B-1] and no end marker, so
+    // the list ends after LIST_QUIET of silence. A header with a value is a
+    // one-item list. Nothing on timeout or a lost link; the state records the
+    // items joined by '\n'. Throws std::invalid_argument on the CP650, which
+    // has no list reply. Mirrors cpx50.comms DolbyCP.get_list.
+    CPX50COMMS_API std::optional<std::vector<std::string>> get_list(std::string_view param,
+                                                                    double timeout = timers::QUERY_TIMEOUT);
 
     CPX50COMMS_API Status status() const;
     CPX50COMMS_API const std::unordered_map<std::string, std::string>& state() const;
+    // [H] The format button lamp mask from the processor's own lines (replies and pushes), never
+    // from this client's SETs or buttons; 0 until one is seen. See cpx50comms.cpp.
+    CPX50COMMS_API long long lamp_mask() const;
     CPX50COMMS_API std::size_t queued() const;
     CPX50COMMS_API Model model() const;
     // Why the last get() returned nothing, one entry per attempt (the line
@@ -184,6 +199,8 @@ private:
     std::optional<std::string_view> value_of(std::optional<std::string_view> response,
                                              std::string_view param) const;
     Reply transact(std::string_view line, double timeout, std::optional<std::string_view> expect_param);
+    std::optional<std::vector<std::string>> transact_list(std::string_view line, std::string_view param,
+                                                          double timeout);
     bool set_and_confirm(const Command& command);   // false: the SET never reached the wire
     bool send_spaced(std::string_view line);
     void close_link();
