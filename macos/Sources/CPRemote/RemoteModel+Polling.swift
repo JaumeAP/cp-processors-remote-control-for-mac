@@ -5,21 +5,21 @@
 import Foundation
 
 extension RemoteModel {
-    func startPolling(_ link: ProcessorLink) {
+    func startPolling(_ link: any ControlLink) {
         pollTask = Task { [weak self] in
             // Read at once, then every two seconds; connect() does not wait
             // for it, so a link that never answers still shows its state.
             while !Task.isCancelled {
                 guard let self else { return }
                 await self.pollCycle(link)
-                await Monotonic.sleep(for: Self.pollInterval)
+                await Monotonic.sleep(for: self.pollInterval)
             }
         }
     }
 
-    func isCurrent(_ link: ProcessorLink) -> Bool { processor === link && !Task.isCancelled }
+    func isCurrent(_ link: any ControlLink) -> Bool { processor === link && !Task.isCancelled }
 
-    func pollCycle(_ link: ProcessorLink) async {
+    func pollCycle(_ link: any ControlLink) async {
         guard isCurrent(link) else { return }
         if !linkOpened {
             // A processor that was off, booting or unreachable at connect
@@ -61,7 +61,7 @@ extension RemoteModel {
         return true
     }
 
-    func refresh(_ link: ProcessorLink) async {
+    func refresh(_ link: any ControlLink) async {
         let panel = processorModel.panel
         let faderStart = Monotonic.Instant.now
         let faderReply = await link.get(panel.fader)
@@ -89,7 +89,7 @@ extension RemoteModel {
 
     /// Unanswered: after a few in a row, reopen a link that is open but
     /// hung, and skip the other reads (each would time out too).
-    func faderUnanswered(_ link: ProcessorLink) async {
+    func faderUnanswered(_ link: any ControlLink) async {
         silentPolls += 1
         note("fader read unanswered (\(silentPolls) of \(Self.silentPollLimit)): \(await link.lastError)")
         markUnread("fader read unanswered")
@@ -110,7 +110,7 @@ extension RemoteModel {
     }
 
     /// The selected button: the CP650's format button, or the CP750's input.
-    func readSelection(_ link: ProcessorLink, panel: PanelProfile) async {
+    func readSelection(_ link: any ControlLink, panel: PanelProfile) async {
         let start = Monotonic.Instant.now
         if processorModel == .cp650 {
             await readFormatButton(link, start: start)
@@ -119,7 +119,7 @@ extension RemoteModel {
         }
     }
 
-    func readFormatButton(_ link: ProcessorLink, start: Monotonic.Instant) async {
+    func readFormatButton(_ link: any ControlLink, start: Monotonic.Instant) async {
         guard let reply = await link.get(Self.formatButtonParam), isCurrent(link),
             let wireValue = Int(reply), (0...7).contains(wireValue),
             mayApply(Self.formatButtonParam, readStartedAt: start),
@@ -128,7 +128,7 @@ extension RemoteModel {
         formatButton = wireValue + 1
     }
 
-    func readInput(_ link: ProcessorLink, inputs: [String], start: Monotonic.Instant) async {
+    func readInput(_ link: any ControlLink, inputs: [String], start: Monotonic.Instant) async {
         guard let reply = await link.get(Self.inputParam), isCurrent(link),
             let index = inputs.firstIndex(of: reply),
             mayApply(Self.inputParam, readStartedAt: start),
@@ -139,7 +139,7 @@ extension RemoteModel {
 
     /// Reads the mute and applies it. Returns whether the processor answered,
     /// or nil when the link is no longer the current one.
-    func readMute(_ link: ProcessorLink, panel: PanelProfile) async -> Bool? {
+    func readMute(_ link: any ControlLink, panel: PanelProfile) async -> Bool? {
         let start = Monotonic.Instant.now
         let muteReply = await link.get(panel.mute)
         guard isCurrent(link) else { return nil }
@@ -152,7 +152,7 @@ extension RemoteModel {
     /// The selected macro, for the screen: its number every poll, its name
     /// whenever the name shown is not that macro's. Unanswered reads pause
     /// these reads for a few polls (`macroReadMissed`).
-    func pollMacro(_ link: ProcessorLink, panel: PanelProfile) async {
+    func pollMacro(_ link: any ControlLink, panel: PanelProfile) async {
         guard let nameParam = panel.macroName else { return }
         if macroPollsToSkip > 0 { macroPollsToSkip -= 1 }
         guard macroPollsToSkip == 0 else { return }
@@ -176,7 +176,7 @@ extension RemoteModel {
 
     /// The number and its name change together: a new key is never shown
     /// beside the old macro's name.
-    func readMacroName(_ link: ProcessorLink, number: Int, nameParam: String) async {
+    func readMacroName(_ link: any ControlLink, number: Int, nameParam: String) async {
         let nameStart = Monotonic.Instant.now
         let nameReply = await link.get(nameParam)
         guard isCurrent(link) else { return }
@@ -201,7 +201,7 @@ extension RemoteModel {
     /// The CP650's programmed formats change only in setup: one attempt
     /// per opened link, so a processor that never answers it is not asked
     /// again.
-    func readFormatList(_ link: ProcessorLink) async {
+    func readFormatList(_ link: any ControlLink) async {
         guard processorModel == .cp650, formatListDue, isCurrent(link) else { return }
         formatListDue = false
         guard let reply = await link.get("format_list"), isCurrent(link) else { return }

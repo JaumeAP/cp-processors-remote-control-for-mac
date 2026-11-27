@@ -1,4 +1,4 @@
-# CP Remote release notes
+# Release notes
 
 ## 1.1.1 (2026-11-26)
 - The app bundle now carries the cpx50comms library, so it starts outside the build tree.

@@ -62,7 +62,9 @@ for line in lines {
 }
 
 var mediaBox = CGRect(x: 0, y: 0, width: 595, height: 842)   // A4
-let info = [kCGPDFContextTitle: "CP Remote release notes", kCGPDFContextAuthor: "CP Remote",
+// The title is what Preview and Quick Look show for the file: it must not read
+// like the app itself, which sits beside it in the disk image.
+let info = [kCGPDFContextTitle: "Release Notes", kCGPDFContextAuthor: "Jaume Puig",
             kCGPDFContextSubject: "Release notes up to version \(version)"] as CFDictionary
 guard let context = CGContext(URL(fileURLWithPath: outputPath) as CFURL, mediaBox: &mediaBox, info) else {
     FileHandle.standardError.write(Data("cannot create \(outputPath)\n".utf8))
