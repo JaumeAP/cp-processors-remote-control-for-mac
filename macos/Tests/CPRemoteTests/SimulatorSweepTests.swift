@@ -1,11 +1,9 @@
 // A sweep of every control of the app against the processor simulator, with
 // the simulator's own control channel (`--control`) as the ground truth. Each
 // test starts a simulator of one model, connects the app to it, drives the
-// controls and, after every step, checks that the simulator and the app agree.
-// The CP650's simulator also takes front-panel changes (`panel KEY VALUE`),
-// which it pushes to the app as the unit does; the other models have no such
-// push, so the app reads their changes on its poll. Runs only when CPSIM_BIN
-// names a processor_sim binary.
+// app's controls and, after every step, checks that the simulator and the app
+// agree. The simulator's front panel (its own changes and pushes) is tested in
+// CPSeries, not here. Runs only when CPSIM_BIN names a processor_sim binary.
 
 import Foundation
 import Testing
@@ -102,10 +100,6 @@ private final class SimulatorProcess: @unchecked Sendable {
         return values
     }
 
-    /// A front-panel change, as the CP650's keys and fader make it.
-    func panel(_ key: String, _ value: String) -> Bool {
-        send("panel \(key) \(value)")?.contains("OK") ?? false
-    }
 }
 
 /// Wait until `condition` holds, at most `seconds`.
@@ -187,8 +181,7 @@ private struct Sequence {
 @MainActor
 @Suite(.serialized, .enabled(if: simulatorBinary != nil))
 struct SimulatorSweepTests {
-    /// Every format button, the mute, the fader and the knob, then the
-    /// simulator's own front-panel changes, then a random mix of both.
+    /// Every format button, the mute, the fader and the knob, then a random mix of them.
     @Test func cp650EveryControlAgreesWithTheSimulator() async throws {
         let sim = try SimulatorProcess(model: "CP650", port: 61650)
         defer { sim.stop() }
@@ -215,26 +208,13 @@ struct SimulatorSweepTests {
         for _ in 0..<25 { model.stepKnob(up: false) }
         #expect(await settled(model, sim).isEmpty, "knob down 25 steps")
 
-        #expect(sim.panel("fader_level", "33"))
-        #expect(await settle { abs(model.fader - 3.3) < 0.05 }, "the simulator's fader reaches the app")
-        #expect(sim.panel("mute", "1"))
-        #expect(await settle { model.muted }, "the simulator's mute reaches the app")
-        #expect(sim.panel("mute", "0"))
-        #expect(await settle { !model.muted }, "the simulator's unmute reaches the app")
-        #expect(sim.panel("format_button", "5"))
-        #expect(await settle { model.formatButton == 6 }, "the simulator's format button reaches the app")
-        #expect(await settled(model, sim).isEmpty, "the app and the simulator agree after the panel changes")
-
         var random = Sequence(state: 20_261_127)
         for step in 0..<60 {
-            switch random.next(7) {
+            switch random.next(4) {
             case 0: model.pressButton(1 + random.next(8))
             case 1: model.toggleMute()
             case 2: model.setFader(Double(random.next(101)) / 10)
-            case 3: model.stepKnob(up: random.next(2) == 0)
-            case 4: _ = sim.panel("fader_level", String(random.next(101)))
-            case 5: _ = sim.panel("mute", String(random.next(2)))
-            default: _ = sim.panel("format_button", String(random.next(8)))
+            default: model.stepKnob(up: random.next(2) == 0)
             }
             let problems = await settled(model, sim)
             #expect(problems.isEmpty, "random step \(step): \(problems)")
