@@ -1,6 +1,6 @@
 # Release notes
 
-## 1.1.1 (2026-11-26)
+## 1.2.0 (2026-11-27)
 - The app bundle now carries the cpx50comms library, so it starts outside the build tree.
 - The Macro menu is gone: it only ever said "No macros on this processor", because the macro list is not read. The CP850's macro keys and the CP950's macro name are unchanged.
 - CP Remote now runs from macOS 12.0 (Monterey) onward. Version 1.1.0 needed a newer macOS.
