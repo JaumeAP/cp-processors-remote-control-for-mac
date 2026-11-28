@@ -25,7 +25,7 @@ private func decodeHex(_ hex: String) -> String? {
         bytes.append(byte)
         index = next
     }
-    return String(decoding: bytes, as: UTF8.self)
+    return String(bytes: bytes, encoding: .utf8)
 }
 
 /// A processor simulator running with `--control`. Its replies are read on a
@@ -61,7 +61,7 @@ private final class SimulatorProcess: @unchecked Sendable {
     private func receive(_ data: Data) {
         guard !data.isEmpty else { return }
         condition.lock()
-        var parts = (partial + String(decoding: data, as: UTF8.self)).components(separatedBy: "\n")
+        var parts = (partial + (String(data: data, encoding: .utf8) ?? "")).components(separatedBy: "\n")
         partial = parts.removeLast()
         lines += parts
         condition.broadcast()
